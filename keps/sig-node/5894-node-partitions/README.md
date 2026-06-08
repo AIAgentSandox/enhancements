@@ -1,87 +1,4 @@
-<!--
-**Note:** When your KEP is complete, all of these comment blocks should be removed.
-
-Follow the guidelines of the [documentation style guide].
-In particular, wrap lines to a reasonable length, to make it
-easier for reviewers to cite specific portions, and to minimize diff churn on
-updates.
-
-[documentation style guide]: https://github.com/kubernetes/community/blob/master/contributors/guide/style-guide.md
-
-To get started with this template:
-
-- [ ] **Pick a hosting SIG.**
-  Make sure that the problem space is something the SIG is interested in taking
-  up. KEPs should not be checked in without a sponsoring SIG.
-- [ ] **Create an issue in kubernetes/enhancements**
-  When filing an enhancement tracking issue, please make sure to complete all
-  fields in that template. One of the fields asks for a link to the KEP. You
-  can leave that blank until this KEP is filed, and then go back to the
-  enhancement and add the link.
-- [ ] **Make a copy of this template directory.**
-  Copy this template into the owning SIG's directory and name it
-  `NNNN-short-descriptive-title`, where `NNNN` is the issue number (with no
-  leading-zero padding) assigned to your enhancement above.
-- [ ] **Fill out as much of the kep.yaml file as you can.**
-  At minimum, you should fill in the "Title", "Authors", "Owning-sig",
-  "Status", and date-related fields.
-- [ ] **Fill out this file as best you can.**
-  At minimum, you should fill in the "Summary" and "Motivation" sections.
-  These should be easy if you've preflighted the idea of the KEP with the
-  appropriate SIG(s).
-- [ ] **Create a PR for this KEP.**
-  Assign it to people in the SIG who are sponsoring this process.
-- [ ] **Merge early and iterate.**
-  Avoid getting hung up on specific details and instead aim to get the goals of
-  the KEP clarified and merged quickly. The best way to do this is to just
-  start with the high-level sections and fill out details incrementally in
-  subsequent PRs.
-
-Just because a KEP is merged does not mean it is complete or approved. Any KEP
-marked as `provisional` is a working document and subject to change. You can
-denote sections that are under active debate as follows:
-
-```
-<<[UNRESOLVED optional short context or usernames ]>>
-Stuff that is being argued.
-<<[/UNRESOLVED]>>
-```
-
-When editing KEPS, aim for tightly-scoped, single-topic PRs to keep discussions
-focused. If you disagree with what is already in a document, open a new PR
-with suggested changes.
-
-One KEP corresponds to one "feature" or "enhancement" for its whole lifecycle.
-You do not need a new KEP to move from beta to GA, for example. If
-new details emerge that belong in the KEP, edit the KEP. Once a feature has become
-"implemented", major changes should get new KEPs.
-
-The canonical place for the latest set of instructions (and the likely source
-of this file) is [here](/keps/NNNN-kep-template/README.md).
-
-**Note:** Any PRs to move a KEP to `implementable`, or significant changes once
-it is marked `implementable`, must be approved by each of the KEP approvers.
-If none of those approvers are still appropriate, then changes to that list
-should be approved by the remaining approvers and/or the owning SIG (or
-SIG Architecture for cross-cutting KEPs).
--->
 # KEP-5894: Node Partitions
-
-<!--
-This is the title of your KEP. Keep it short, simple, and descriptive. A good
-title can help communicate what the KEP is and should be considered as part of
-any review.
--->
-
-<!--
-A table of contents is helpful for quickly jumping to sections of a KEP and for
-highlighting any additional information provided beyond the standard KEP
-template.
-
-Ensure the TOC is wrapped with
-  <code>&lt;!-- toc --&rt;&lt;!-- /toc --&rt;</code>
-tags, and then generate with `hack/update-toc.sh`.
--->
 
 <!-- toc -->
 - [Release Signoff Checklist](#release-signoff-checklist)
@@ -125,23 +42,9 @@ tags, and then generate with `hack/update-toc.sh`.
 
 ## Release Signoff Checklist
 
-<!--
-**ACTION REQUIRED:** In order to merge code into a release, there must be an
-issue in [kubernetes/enhancements] referencing this KEP and targeting a release
-milestone **before the [Enhancement Freeze](https://git.k8s.io/sig-release/releases)
-of the targeted release**.
-
-For enhancements that make changes to code or processes/procedures in core
-Kubernetes—i.e., [kubernetes/kubernetes], we require the following Release
-Signoff checklist to be completed.
-
-Check these off as they are completed for the Release Team to track. These
-checklist items _must_ be updated for the enhancement to be released.
--->
-
 Items marked with (R) are required *prior to targeting to a milestone / release*.
 
-- [ ] (R) Enhancement issue in release milestone, which links to KEP dir in [kubernetes/enhancements] (not the initial KEP PR)
+- [X] (R) Enhancement issue in release milestone, which links to KEP dir in [kubernetes/enhancements] (not the initial KEP PR)
 - [ ] (R) KEP approvers have approved the KEP status as `implementable`
 - [ ] (R) Design details are appropriately documented
 - [ ] (R) Test plan is in place, giving consideration to SIG Architecture and SIG Testing input (including test refactors)
@@ -167,18 +70,6 @@ Items marked with (R) are required *prior to targeting to a milestone / release*
 
 ## Summary
 
-<!--
-This section is incredibly important for producing high-quality, user-focused
-documentation such as release notes or a development roadmap. It should be
-possible to collect this information before implementation begins, in order to
-avoid requiring implementors to split their attention between writing release
-notes and implementing the feature itself. KEP editors and SIG Docs
-should help to ensure that the tone and content of the `Summary` section is
-useful for a wide audience.
-
-A good summary is probably at least a paragraph in length.
--->
-
 Node Partitions is an way to split a Node into partitions, each of them hosting a set of Pods. The proposal is to start
 with the partition dedicated to separate system Pods from user Pods. And later decide if this need to be extended for other use cases.
 
@@ -191,15 +82,6 @@ as a plugin.
 The recommendation is to make Node Partitions as a dedicated CPU set as well as a separate cgroup hierarchy so the memory limit and other properties can be applied to the whole partition.
 
 ## Motivation
-
-<!--
-This section is for explicitly listing the motivation, goals, and non-goals of
-this KEP.  Describe why the change is important and the benefits to users. The
-motivation section can optionally provide links to [experience reports] to
-demonstrate the interest in a KEP within the wider Kubernetes community.
-
-[experience reports]: https://github.com/golang/go/wiki/ExperienceReports
--->
 
 “Sandboxing” system daemonsets is a longstanding problem that resulted in numerous DIY solutions with no obvious winner. The existing model is not expressive enough to effectively isolate groups of Pods or isolate user Pods from system workloads.
 
@@ -215,10 +97,6 @@ Node Partitions solves core problems of HPC and AI/ML workloads w.r.t. Node reli
 
 ### Goals
 
-<!--
-List the specific goals of the KEP. What is it trying to achieve? How will we
-know that this has succeeded?
--->
 Alpha stage:
 
 - Allow to split a Node into two partitions: system and default (user).
@@ -235,24 +113,10 @@ After alpha:
 
 ### Non-Goals
 
-<!--
-What is out of scope for this KEP? Listing non-goals helps to focus discussion
-and make progress.
--->
-
 - Implementing this isolation purely via external plugins (NRI, DRA) without kubelet changes, as metrics collection and eviction require deep integration.
 - Changing the fundamental QoS levels or resource accounting logic within a partition.
 
 ## Proposal
-
-<!--
-This is where we get down to the specifics of what the proposal actually is.
-This should have enough detail that reviewers can understand exactly what
-you're proposing, but should not include things like API designs or
-implementation. What is the desired outcome and how do we measure success?.
-The "Design Details" section below is for the real
-nitty-gritty.
--->
 
 The Node partition is a new concept that allows splitting a Node into separate partitions. Each partition has dedicated CPUs, dedicated memory (requests and limits), and other resources. Each partition can run Pods. These Pods are split in the same QoS levels as they would on a Node today, but they are limited to the Partition size. All overcommit happens inside that partition.
 
