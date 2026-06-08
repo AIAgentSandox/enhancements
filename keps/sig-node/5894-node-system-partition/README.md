@@ -251,7 +251,99 @@ For the "user" workload (the legacy hierarchy), resource isolation is effectivel
 
 ### Configuration
 
-Kubelet will have a configuration section to describe the system partition. It will include memory allocatable size and limits as well as a set of CPUs that needs to be associated with the partition.
+The system partition is statically defined in the kubelet
+configuration. A new `systemPartition` section is added to the
+`KubeletConfiguration` API:
+
+```yaml
+apiVersion: kubelet.config.k8s.io/v1beta1
+kind: KubeletConfiguration
+systemPartition:
+  memoryLimit: "4Gi"
+  cpuset: "0-3"
+  namespaces:
+    - kube-system
+```
+
+Fields:
+
+- **`memoryLimit`**: Hard memory limit for all Pods in the system
+  partition, enforced via `memory.max` on the `kubepods/system/`
+  cgroup. This budget is separate from `kubeReserved` and
+  `systemReserved` — those cover kubelet, container runtime, and OS
+  services respectively, while `memoryLimit` covers system partition
+  Pods only. Note: since scheduler integration is deferred, there is
+  no corresponding `memoryRequest` that would be subtracted from
+  Node Allocatable. The `memoryLimit` can be set higher than the sum
+  of requests of Pods in the system partition, allowing system Pods
+  to burst up to the limit without the scheduler accounting for it.
+- **`cpuset`**: Set of CPUs dedicated to system partition Pods. This
+  should typically match the CPUs assigned to kubelet and containerd
+  (via systemd or `reservedSystemCPUs`) so that system Pods and
+  system services share the same cores without interfering with user
+  workloads.
+- **`namespaces`**: List of namespaces whose Pods are placed into the
+  system partition. In alpha, this is the sole mechanism for
+  determining partition membership. Pods in listed namespaces are
+  placed under `kubepods/system/`; all other Pods remain in the
+  default hierarchy.
+
+If `systemPartition` is not specified or empty, kubelet behaves
+identically to today — no system partition cgroup is created.
+
+**Note:** In alpha, partition membership is determined entirely by
+kubelet configuration — there is no scheduler integration. The
+scheduler is not aware of partitions and does not account for
+partition-level resource boundaries when making placement decisions.
+Administrators must ensure that system Pods fit within the configured
+partition limits. Scheduler integration is planned for a later stage.
+
+#### Relationship to existing kubelet resource reservation
+
+Kubelet already has several configuration fields for reserving node
+resources. The system partition is complementary to these mechanisms:
+
+- **`kubeReserved` / `systemReserved`**: Reserve CPU, memory, and
+  other resources for kubelet, container runtime, and OS services
+  respectively. These are subtracted from Node Allocatable and apply
+  to host processes, not Pods. The system partition's `memoryLimit`
+  is separate — it covers system *Pods* only.
+- **`kubeReservedCgroup` / `systemReservedCgroup`**: Enforce the
+  above reservations via cgroups. These cgroups are for host
+  processes (kubelet, containerd, sshd, etc.), not for Pods. The
+  system partition cgroup (`kubepods/system/`) is a separate
+  hierarchy under `kubepods` for Pod workloads.
+- **`reservedSystemCPUs`**: Pins specific CPUs for system use via
+  CPU Manager. The system partition's `cpuset` should typically match
+  `reservedSystemCPUs` so that system Pods and system services share
+  the same cores, keeping user workload CPUs free from system
+  interference.
+- **`--reserved-memory`** (Memory Manager): Specifies how reserved
+  memory is distributed across NUMA nodes, so the Memory Manager
+  knows which NUMA nodes have capacity available for user workload
+  allocation. In principle, the system partition's memory should
+  also be accounted for in `--reserved-memory` so the Memory Manager
+  can correctly determine per-NUMA allocatable capacity. However,
+  since alpha does not integrate with the scheduler and does not
+  subtract system partition memory from Node Allocatable, accounting
+  for system partition memory in `--reserved-memory` is deferred to
+  a later milestone.
+
+The total system resource budget on a node is:
+
+```
+System services:  kubeReserved + systemReserved
+System Pods:      systemPartition.memoryLimit
+User Pods:        Capacity - kubeReserved - systemReserved
+                  - systemPartition.memoryLimit - evictionThreshold
+```
+
+In alpha, Node Allocatable is not automatically adjusted for the
+system partition — the administrator must account for system Pod
+resources when sizing `kubeReserved`/`systemReserved` or accept
+that user Pod capacity is effectively reduced. Post-alpha, kubelet
+should subtract `systemPartition.memoryLimit` from Node Allocatable
+and report it to the scheduler.
 
 ### Eviction
 
