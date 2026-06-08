@@ -126,7 +126,7 @@ Alpha stage:
 - System partition shares resources with kubelet, container runtime,
   and other host processes.
 
-After alpha:
+After the first alpha:
 
 - Scheduling integration to target Pods to the system partition.
 - Additional resource isolation between system and default partitions.
@@ -504,7 +504,8 @@ Pod sync, which involves container restarts for affected Pods.
 **Downgrade**: Remove the `systemPartition` config and disable the
 feature gate, then restart kubelet. System Pods will be restarted
 in the default cgroup hierarchy. The orphaned `kubepods/system/`
-cgroup will be cleaned up by kubelet's cgroup garbage collection.
+cgroup will be cleaned up by kubelet's cgroup reconciliation logic
+similar how MemoryQoS KEP implemented it.
 
 ### Version Skew Strategy
 
@@ -609,10 +610,12 @@ before, within the system partition's resource constraints.
 ###### What are the SLIs (Service Level Indicators) an operator can use to determine the health of the service?
 
 - [x] Metrics
-  - Metric name: `kubelet_system_partition_memory_usage_bytes`
+  - Metric name: `kubelet_partition_memory_usage_bytes`
+  - Labels: `partition="system"`
   - Components exposing the metric: kubelet
 - [x] Metrics
-  - Metric name: `kubelet_system_partition_memory_limit_bytes`
+  - Metric name: `kubelet_partition_memory_limit_bytes`
+  - Labels: `partition="system"`
   - Components exposing the metric: kubelet
 
 ###### Are there any missing metrics that would be useful to have to improve observability of this feature?
