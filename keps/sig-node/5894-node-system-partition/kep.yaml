@@ -1,4 +1,4 @@
-title: Node Partitions
+title: Node System Partition
 kep-number: 5894
 authors:
   - "@SergeyKanzhelev"
@@ -31,7 +31,7 @@ milestone:
 # The following PRR answers are required at alpha release
 # List the feature gate name and the components for which it must be enabled
 feature-gates:
-  - name: NodePartitions
+  - name: NodeSystemPartition
     components:
       - kubelet
       - kube-scheduler

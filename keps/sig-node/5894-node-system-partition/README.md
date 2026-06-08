@@ -1,4 +1,4 @@
-# KEP-5894: Node Partitions
+# KEP-5894: Node System Partition
 
 <!-- toc -->
 - [Release Signoff Checklist](#release-signoff-checklist)
@@ -70,61 +70,99 @@ Items marked with (R) are required *prior to targeting to a milestone / release*
 
 ## Summary
 
-Node Partitions is an way to split a Node into partitions, each of them hosting a set of Pods. The proposal is to start
-with the partition dedicated to separate system Pods from user Pods. And later decide if this need to be extended for other use cases.
+Node System Partition introduces a dedicated partition on a Node for
+system Pods (e.g., kube-system workloads), isolating them from user
+workloads. The system partition has its own cgroup hierarchy with
+dedicated CPU set and memory limits, ensuring system Pods cannot
+interfere with user Pods and vice versa.
 
-Each partition will be categorized by resources allocated to this partition. Pods scheduled to the partition
-will be limited to consume only these resources. There are a few DIY solutions for this, but this KEP is needed
-as it will introduce the memory limiting via the separate cgroup hierarchy. Introducing the new cgroup hierarchy and limiting
-memory requires kubelet changes to support functions like metrics collection and eviction which is impossible to implement
-as a plugin.
+There are a few DIY solutions for system daemon isolation, but this
+KEP is needed because enforcing memory limits requires a separate
+cgroup hierarchy, and integrating that with kubelet functions like
+metrics collection and eviction is impossible to implement as a
+plugin.
 
-The recommendation is to make Node Partitions as a dedicated CPU set as well as a separate cgroup hierarchy so the memory limit and other properties can be applied to the whole partition.
+This KEP is scoped to a single system partition. Supporting arbitrary
+user-defined partitions is a non-goal.
 
 ## Motivation
 
-“Sandboxing” system daemonsets is a longstanding problem that resulted in numerous DIY solutions with no obvious winner. The existing model is not expressive enough to effectively isolate groups of Pods or isolate user Pods from system workloads.
+Isolating system daemonsets from user workloads is a longstanding
+problem with numerous DIY solutions and no obvious winner. Today,
+system Pods and user Pods share the same resource boundaries — system
+Pods can burst into user resources and vice versa. This makes it
+impossible to guarantee that critical system components have the
+resources they need, or that user workloads are free from system
+interference.
 
-This problem is not new. But it wasn't top of mind for a long time as traditional workloads benefited from overcommitting: system resources can be used by user Pod and system pods can burst into user resources when required.
+This problem is increasingly important as Kubernetes targets new
+workload types:
 
-However Kubernetes is increasingly target new types of workloads. Workloads can be classified as:
+1. **Traditional workloads**: Benefit from overcommit, but need basic
+   separation so a misbehaving system daemon doesn’t destabilize user
+   Pods.
+2. **HPC workloads**: Require minimal system interference and strict
+   resource isolation. These workloads need system components
+   constrained to a small, bounded resource footprint.
+3. **AI/ML workloads**: Use specialized devices and need a responsive
+   management layer that is sandboxed and guaranteed its own
+   resources, without competing with the user workload.
 
-1. **Overcommit more, safely**: Traditional workloads where high density and basic separation are prioritized.
-2. **Give me what’s mine (HPC)**: Workloads requiring minimal system interference and strict resource isolation (CPU, Memory, disk, network). These workloads would like to minimize the amount resources system uses and generally OK with dropping features or speed.
-3. **Don’t touch me (AI/ML)**: Workloads using mostly specialized devices that require a highly responsive management layer in its own sandbox. These workloads typically can allocate more "traditional" resource for system workloads and expect those to be isolated and work fast.
-
-Node Partitions solves core problems of HPC and AI/ML workloads w.r.t. Node reliability by eliminating management layer interference into user workload.
+A dedicated system partition solves these problems by giving system
+Pods their own resource-limited cgroup hierarchy, eliminating
+interference between the management layer and user workloads.
 
 ### Goals
 
 Alpha stage:
 
-- Allow to split a Node into two partitions: system and default (user).
-- Support memory limiting via a separate cgroup hierarchy for the system partition.
-- Support setting CPU set for Pods scheduled into system partition.
-- Allow kubelet to treat each partition as a whole node for resource allocation and overcommit logic.
-- Partition is statically defined using a kubelet config.
-- Design system partition to be able to share resources with kubelet, container runtime and other processes.
+- Introduce a system partition with a dedicated cgroup hierarchy for
+  system Pods (e.g., kube-system namespace).
+- Support memory limiting via the system partition's cgroup root.
+- Support setting a dedicated CPU set for system partition Pods.
+- Kubelet treats system and default partitions independently for
+  resource allocation and overcommit logic.
+- System partition is statically defined via kubelet configuration.
+- System partition shares resources with kubelet, container runtime,
+  and other host processes.
 
 After alpha:
 
-- Scheduling integration to allow target Pods to partitions.
-- More resources isolation between partitions.
+- Scheduling integration to target Pods to the system partition.
+- Additional resource isolation between system and default partitions.
 
 ### Non-Goals
 
+- Supporting multiple arbitrary partitions. This KEP is scoped to a single system partition only.
 - Implementing this isolation purely via external plugins (NRI, DRA) without kubelet changes, as metrics collection and eviction require deep integration.
 - Changing the fundamental QoS levels or resource accounting logic within a partition.
 
 ## Proposal
 
-The Node partition is a new concept that allows splitting a Node into separate partitions. Each partition has dedicated CPUs, dedicated memory (requests and limits), and other resources. Each partition can run Pods. These Pods are split in the same QoS levels as they would on a Node today, but they are limited to the Partition size. All overcommit happens inside that partition.
+The Node System Partition introduces a system partition — a
+resource-bounded area of the Node dedicated to running system Pods
+(e.g., kube-system workloads). The system partition has dedicated
+CPUs, memory limits, and its own cgroup hierarchy. Pods in the system
+partition follow the same QoS levels as they would on a Node today,
+but are constrained to the partition's resources. All overcommit
+within the system partition happens against its resource budget only.
 
-The main idea of Node Partitions is to keep the logic of resource allocation and overcommit to be the same as it is currently defined for the whole Node. Kubelet will treat each partition as a whole node, accounting for requests and limits as it does today. This way there are no new race conditions or resources double accounting needed as may happen with “external” management of partitions like NRI or DRA.
+Kubelet treats the system partition and the default (user) partition
+independently for resource allocation and overcommit, using the same
+logic currently defined for the whole Node. This avoids race
+conditions or double-accounting that can occur with external
+management approaches like NRI or DRA.
 
-A  "default" partition holding the majority of the cgroup hierarchy will stay as-is. The KEP aims to minimize changes to the existing structure to avoid breaking external monitoring tools, container runtimes, or other node-level agents that rely on the standard Kubernetes cgroup layout. To achieve this, only system Pods (e.g., those in the `kube-system` namespace) will be moved to a separate sub-hierarchy, while all other Pods will remain in their legacy locations.
+The default partition retains the existing cgroup hierarchy as-is.
+Only system Pods are moved to a new sub-hierarchy under `kubepods`.
+This minimizes impact on external monitoring tools, container
+runtimes, and other node-level agents that rely on the standard
+Kubernetes cgroup layout.
 
-In alpha stage, Node Allocatable will not change as KEP will assume that user accounted for all system pods correctly. In later stages, Node will report its capacity as a default partition and separate allocatables for named partitions.
+In the alpha stage, Node Allocatable will not change — the KEP
+assumes the administrator has correctly accounted for system Pod
+resources. In later stages, the Node may report separate allocatable
+values for the system partition.
 
 ### User Stories (Optional)
 
@@ -469,7 +507,7 @@ well as the [existing list] of feature gates.
 -->
 
 - [x] Feature gate (also fill in values in `kep.yaml`)
-  - Feature gate name: `NodePartitions`
+  - Feature gate name: `NodeSystemPartition`
   - Components depending on the feature gate: `kubelet`
 - [ ] Other
   - Describe the mechanism:
