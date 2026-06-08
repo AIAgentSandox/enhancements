@@ -366,84 +366,48 @@ when drafting this test plan.
 [testing-guidelines]: https://git.k8s.io/community/contributors/devel/sig-testing/testing.md
 -->
 
-[ ] I/we understand the owners of the involved components may require updates to
+[x] I/we understand the owners of the involved components may require updates to
 existing tests to make this code solid enough prior to committing the changes necessary
 to implement this enhancement.
 
 ##### Prerequisite testing updates
 
-<!--
-Based on reviewers feedback describe what additional tests need to be added prior
-implementing this enhancement to ensure the enhancements have also solid foundations.
--->
+Existing container manager and eviction manager tests should have
+sufficient coverage before modifying those packages.
 
 ##### Unit tests
 
-<!--
-In principle every added code should have complete unit test coverage, so providing
-the exact set of tests will not bring additional value.
-However, if complete unit test coverage is not possible, explain the reason of it
-together with explanation why this is acceptable.
--->
+Core packages to be modified for alpha:
 
-<!--
-Additionally, for Alpha try to enumerate the core package you will be touching
-to implement this enhancement and provide the current unit coverage for those
-in the form of:
-- <package>: <date> - <current test coverage>
-The data can be easily read from:
-https://testgrid.k8s.io/sig-testing-canaries#ci-kubernetes-coverage-unit
+- `pkg/kubelet/cm`: container manager — system partition cgroup
+  creation, Pod placement logic, cpuset assignment
+- `pkg/kubelet/eviction`: eviction manager — partition-aware
+  eviction targeting and memory monitoring
+- `pkg/kubelet/kubelet_pods.go`: Pod admission — namespace-based
+  partition membership check
 
-This can inform certain test coverage improvements that we want to do before
-extending the production code to implement this enhancement.
--->
-
-- `<package>`: `<date>` - `<test coverage>`
+Coverage data will be collected before implementation begins.
 
 ##### Integration tests
 
-<!--
-Integration tests are contained in https://git.k8s.io/kubernetes/test/integration.
-Integration tests allow control of the configuration parameters used to start the binaries under test.
-This is different from e2e tests which do not allow configuration of parameters.
-Doing this allows testing non-default options and multiple different and potentially conflicting command line options.
-For more details, see https://github.com/kubernetes/community/blob/master/contributors/devel/sig-testing/testing-strategy.md
-
-If integration tests are not necessary or useful, explain why.
--->
-
-<!--
-This question should be filled when targeting a release.
-For Alpha, describe what tests will be added to ensure proper quality of the enhancement.
-
-For Beta and GA, document that tests have been written,
-have been executed regularly, and have been stable.
-This can be done with:
-- permalinks to the GitHub source code
-- links to the periodic job (typically https://testgrid.k8s.io/sig-release-master-blocking#integration-master), filtered by the test name
-- a search in the Kubernetes bug triage tool (https://storage.googleapis.com/k8s-triage/index.html)
--->
-
-- [test name](https://github.com/kubernetes/kubernetes/blob/2334b8469e1983c525c0c6382125710093a25883/test/integration/...): [integration master](https://testgrid.k8s.io/sig-release-master-blocking#integration-master?include-filter-by-regex=MyCoolFeature), [triage search](https://storage.googleapis.com/k8s-triage/index.html?test=MyCoolFeature)
+Integration tests are not applicable for this feature. The system
+partition relies on cgroup operations that require a real node
+environment. Testing will be covered by node e2e tests instead.
 
 ##### e2e tests
 
-<!--
-This question should be filled when targeting a release.
-For Alpha, describe what tests will be added to ensure proper quality of the enhancement.
+Node e2e tests will be added to validate:
 
-For Beta and GA, document that tests have been written,
-have been executed regularly, and have been stable.
-This can be done with:
-- permalinks to the GitHub source code
-- links to the periodic job (typically a job owned by the SIG responsible for the feature), filtered by the test name
-- a search in the Kubernetes bug triage tool (https://storage.googleapis.com/k8s-triage/index.html)
-
-We expect no non-infra related flakes in the last month as a GA graduation criteria.
-If e2e tests are not necessary or useful, explain why.
--->
-
-- [test name](https://github.com/kubernetes/kubernetes/blob/2334b8469e1983c525c0c6382125710093a25883/test/e2e/...): [SIG ...](https://testgrid.k8s.io/sig-...?include-filter-by-regex=MyCoolFeature), [triage search](https://storage.googleapis.com/k8s-triage/index.html?test=MyCoolFeature)
+- System partition cgroup hierarchy is created when feature is
+  enabled and configured
+- Pods in configured namespaces are placed under
+  `kubepods/system/` cgroup
+- Pods in other namespaces remain in the default cgroup hierarchy
+- Memory limit is enforced on the system partition cgroup
+- Eviction targets system partition Pods when partition memory
+  pressure is detected
+- Feature disabled: no system partition cgroup is created, all
+  Pods use default hierarchy
 
 ### Graduation Criteria
 
@@ -529,32 +493,28 @@ in back-to-back releases.
 
 ### Upgrade / Downgrade Strategy
 
-<!--
-If applicable, how will the component be upgraded and downgraded? Make sure
-this is in the test plan.
+**Upgrade**: No changes required to maintain previous behavior.
+The feature is opt-in — existing clusters that do not configure
+`systemPartition` in kubelet config are unaffected. To enable the
+feature, add the `systemPartition` section to kubelet config and
+enable the `NodeSystemPartition` feature gate, then restart kubelet.
+System Pods will be moved to the new cgroup hierarchy on the next
+Pod sync, which involves container restarts for affected Pods.
 
-Consider the following in developing an upgrade/downgrade strategy for this
-enhancement:
-- What changes (in invocations, configurations, API use, etc.) is an existing
-  cluster required to make on upgrade, in order to maintain previous behavior?
-- What changes (in invocations, configurations, API use, etc.) is an existing
-  cluster required to make on upgrade, in order to make use of the enhancement?
--->
+**Downgrade**: Remove the `systemPartition` config and disable the
+feature gate, then restart kubelet. System Pods will be restarted
+in the default cgroup hierarchy. The orphaned `kubepods/system/`
+cgroup will be cleaned up by kubelet's cgroup garbage collection.
 
 ### Version Skew Strategy
 
-<!--
-If applicable, how will the component handle version skew with other
-components? What are the guarantees? Make sure this is in the test plan.
-
-Consider the following in developing a version skew strategy for this
-enhancement:
-- Does this enhancement involve coordinating behavior in the control plane and nodes?
-- How does an n-3 kubelet or kube-proxy without this feature available behave when this feature is used?
-- How does an n-1 kube-controller-manager or kube-scheduler without this feature available behave when this feature is used?
-- Will any other components on the node change? For example, changes to CSI,
-  CRI or CNI may require updating that component before the kubelet.
--->
+In alpha, this feature is entirely node-local — it only affects
+kubelet and requires no control plane changes. There are no version
+skew concerns: an older scheduler or controller-manager is unaware
+of system partitions and behaves normally. The container runtime
+must support the `CgroupParent` field in the CRI pod sandbox config,
+which is already supported by current versions of containerd and
+CRI-O.
 
 ## Production Readiness Review Questionnaire
 
@@ -758,9 +718,18 @@ Major milestones might include:
 
 ## Drawbacks
 
-<!--
-Why should this KEP _not_ be implemented?
--->
+- **Increased kubelet complexity**: Adding partition-aware cgroup
+  management, eviction, and metrics increases the surface area of
+  kubelet's container manager. This must be justified by clear user
+  demand.
+- **Configuration burden**: Administrators must correctly size the
+  system partition's memory limit and CPU set. Misconfiguration can
+  lead to unexpected OOM kills of system Pods or underutilized node
+  resources.
+- **No shared burst**: System Pods and system services (kubelet,
+  containerd) cannot burst into each other's memory since they are
+  in separate cgroups. This is a regression from today's behavior
+  where all system components can use any available node memory.
 
 ## Alternatives
 
