@@ -837,9 +837,58 @@ not need to be as detailed as the proposal, but should include enough
 information to express the idea and why it was not acceptable.
 -->
 
-- **NRI Plugins**: While NRI can be used to manage partitions externally, it lacks deep integration with kubelet for metrics collection and eviction, leading to potential race conditions.
-- **DRA (Dynamic Resource Allocation)**: DRA for Native Resources is moving in this direction but does not yet solve the core node reliability and isolation problems as effectively as a native partition concept.
-- **DIY Solutions**: Many users have built custom solutions for sandboxing system daemonsets, but there is no standard winner, and they often struggle with memory limiting and resource accounting.
+### Alternative cgroup hierarchies
+
+A key design question is how to share a memory limit between system
+partition Pods and system services (kubelet, containerd). Several
+cgroup hierarchy alternatives were considered:
+
+**System Pods under `system.slice`**: Place system partition Pods
+directly under `system.slice` so that a single `memory.max` covers
+both system services and system Pods. However, systemd owns
+`system.slice` and expects its children to be `.service` or `.scope`
+units — raw cgroup directories may be cleaned up during
+reconciliation. More importantly, setting `memory.max` on
+`system.slice` would cap all system services (sshd, journald, udev,
+etc.), not just Kubernetes-related ones.
+
+**New top-level slice as common parent**: Create a `node-system.slice`
+containing both system services and system Pods, with `memory.max`
+set on the slice. This requires moving kubelet and containerd out of
+`system.slice` via systemd unit overrides on every node — invasive,
+fragile, and hard to manage at scale.
+
+**Soft enforcement via combined monitoring**: Keep the existing
+hierarchy unchanged and have kubelet monitor the combined memory of
+`system.slice` and the system partition cgroup, evicting Pods based
+on aggregate usage. This avoids hierarchy changes but provides no
+hard OOM boundary — the kernel cannot enforce the combined limit
+atomically, and enforcement depends on kubelet polling.
+
+**Chosen approach: Separate cgroup under `kubepods`** (Option D): The
+system partition gets its own cgroup under `kubepods/system/` with
+`memory.max` set independently. The system partition's memory budget
+is defined as the total system budget minus `kube-reserved` and
+`system-reserved`. CPU isolation is achieved by assigning the same
+`cpuset` to the system partition and system services. This builds on
+the existing reserved resource model, requires no systemd hierarchy
+changes, and does not fight systemd ownership. The trade-off is that
+system Pods and system services cannot burst into each other's memory
+— the administrator must correctly size each piece. This is
+acceptable for alpha and can be revisited later.
+
+### Other alternatives
+
+- **NRI Plugins**: NRI can manage partitions externally, but lacks
+  deep integration with kubelet for metrics collection and eviction,
+  leading to potential race conditions.
+- **DRA (Dynamic Resource Allocation)**: DRA for Native Resources is
+  moving in this direction but does not yet solve the core node
+  reliability and isolation problems as effectively as a native
+  partition concept.
+- **DIY Solutions**: Many users have built custom solutions for
+  sandboxing system daemonsets, but there is no standard winner, and
+  they often struggle with memory limiting and resource accounting.
 - [RedHat: Management Workload Partitioning](https://github.com/openshift/enhancements/blob/master/enhancements/workload-partitioning/management-workload-partitioning.md)
 
 ## Infrastructure Needed (Optional)
