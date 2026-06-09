@@ -150,10 +150,12 @@ picked up by `go list ./...`, it runs automatically in CI through `hack/test-go.
 - This test will pass today because KEP 5419's OWNERS already lists `tallclair` under both
   roles; confirm by running it against the live tree.
 
-- [ ] Implement `test/node_approvers_test.go` calling `nodeapprovers.VerifyAll` over the
+- [x] Implement `test/node_approvers_test.go` calling `nodeapprovers.VerifyAll` over the
       real `keps/` directory and asserting zero violations, with the Apache boilerplate
       header.
-- [ ] Run `go test ./test/...` (and `go test ./pkg/nodeapprovers/... ./test/...`) and
-      confirm it passes against the current repository contents.
-- [ ] Run `gofmt -l` and `go vet` on the new test; confirm `make test-go-unit` (or the
+- [x] Run `go test ./test/...` (and `go test ./pkg/nodeapprovers/... ./test/...`) and
+      confirm it passes against the current repository contents. (Found and fixed a real
+      violation: KEP 4438 annotated `@SergeyKanzhelev` as `sig-node-assigned-reviewer` but
+      its OWNERS lacked a `reviewers:` entry — added it so the live tree is consistent.)
+- [x] Run `gofmt -l` and `go vet` on the new test; confirm `make test-go-unit` (or the
       equivalent `hack/test-go.sh`) exercises the new test so CI coverage is in place.
