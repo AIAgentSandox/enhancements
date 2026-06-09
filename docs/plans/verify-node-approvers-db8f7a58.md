@@ -120,14 +120,14 @@ point and cover it with table-driven unit tests over local fixtures.
 - `testdata/no-markers/kep.yaml` — reviewers/approvers present but none carry the marker
   comments (and no OWNERS). Expect 0 violations.
 
-- [ ] Implement `pkg/nodeapprovers/verify.go` with the markers, `Violation` type,
+- [x] Implement `pkg/nodeapprovers/verify.go` with the markers, `Violation` type,
       `VerifyKEP`, and `VerifyAll` as described, including the Apache boilerplate header.
-- [ ] Create the five `testdata/` fixture directories with `kep.yaml` (and `OWNERS` where
+- [x] Create the five `testdata/` fixture directories with `kep.yaml` (and `OWNERS` where
       applicable) matching the example comment style from KEP 5419.
-- [ ] Write table-driven unit tests in `pkg/nodeapprovers/verify_test.go` covering each
+- [x] Write table-driven unit tests in `pkg/nodeapprovers/verify_test.go` covering each
       fixture (assert expected violation counts and that the right user/role is reported),
       plus a direct `VerifyAll(testdata)` aggregation test.
-- [ ] Run `gofmt -l`, `go vet`, `go build ./...`, and `go test ./pkg/nodeapprovers/...`;
+- [x] Run `gofmt -l`, `go vet`, `go build ./...`, and `go test ./pkg/nodeapprovers/...`;
       fix until all pass.
 
 ### Task 2: Wire the verifier into CI via a repo-wide integration test
