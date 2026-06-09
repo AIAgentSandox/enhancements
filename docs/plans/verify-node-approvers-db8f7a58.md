@@ -120,14 +120,14 @@ point and cover it with table-driven unit tests over local fixtures.
 - `testdata/no-markers/kep.yaml` — reviewers/approvers present but none carry the marker
   comments (and no OWNERS). Expect 0 violations.
 
-- [x] Implement `pkg/nodeapprovers/verify.go` with the markers, `Violation` type,
+- [ ] Implement `pkg/nodeapprovers/verify.go` with the markers, `Violation` type,
       `VerifyKEP`, and `VerifyAll` as described, including the Apache boilerplate header.
-- [x] Create the five `testdata/` fixture directories with `kep.yaml` (and `OWNERS` where
+- [ ] Create the five `testdata/` fixture directories with `kep.yaml` (and `OWNERS` where
       applicable) matching the example comment style from KEP 5419.
-- [x] Write table-driven unit tests in `pkg/nodeapprovers/verify_test.go` covering each
+- [ ] Write table-driven unit tests in `pkg/nodeapprovers/verify_test.go` covering each
       fixture (assert expected violation counts and that the right user/role is reported),
       plus a direct `VerifyAll(testdata)` aggregation test.
-- [x] Run `gofmt -l`, `go vet`, `go build ./...`, and `go test ./pkg/nodeapprovers/...`;
+- [ ] Run `gofmt -l`, `go vet`, `go build ./...`, and `go test ./pkg/nodeapprovers/...`;
       fix until all pass.
 
 ### Task 2: Wire the verifier into CI via a repo-wide integration test
@@ -150,10 +150,10 @@ picked up by `go list ./...`, it runs automatically in CI through `hack/test-go.
 - This test will pass today because KEP 5419's OWNERS already lists `tallclair` under both
   roles; confirm by running it against the live tree.
 
-- [x] Implement `test/node_approvers_test.go` calling `nodeapprovers.VerifyAll` over the
+- [ ] Implement `test/node_approvers_test.go` calling `nodeapprovers.VerifyAll` over the
       real `keps/` directory and asserting zero violations, with the Apache boilerplate
       header.
-- [x] Run `go test ./test/...` (and `go test ./pkg/nodeapprovers/... ./test/...`) and
+- [ ] Run `go test ./test/...` (and `go test ./pkg/nodeapprovers/... ./test/...`) and
       confirm it passes against the current repository contents.
-- [x] Run `gofmt -l` and `go vet` on the new test; confirm `make test-go-unit` (or the
+- [ ] Run `gofmt -l` and `go vet` on the new test; confirm `make test-go-unit` (or the
       equivalent `hack/test-go.sh`) exercises the new test so CI coverage is in place.
