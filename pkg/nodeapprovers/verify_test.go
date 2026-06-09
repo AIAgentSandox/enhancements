@@ -23,44 +23,71 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// violationsFor returns the expected violations for a fixture directory, with
+// KEPPath filled in to point at that fixture's kep.yaml.
+func violationsFor(dir string, partials ...Violation) []Violation {
+	kepPath := filepath.Join("testdata", dir, "kep.yaml")
+	out := make([]Violation, 0, len(partials))
+	for _, p := range partials {
+		p.KEPPath = kepPath
+		out = append(out, p)
+	}
+	return out
+}
+
 func TestVerifyKEP(t *testing.T) {
 	testcases := []struct {
-		name      string
-		dir       string
-		wantCount int
-		wantRole  string
-		wantUser  string
+		name string
+		dir  string
+		want []Violation
 	}{
 		{
-			name:      "valid",
-			dir:       "valid",
-			wantCount: 0,
+			name: "valid",
+			dir:  "valid",
 		},
 		{
-			name:      "missing reviewer",
-			dir:       "missing-reviewer",
-			wantCount: 1,
-			wantRole:  reviewerRole,
-			wantUser:  "someoneelse",
+			// Mixed-case handles in kep.yaml must match lowercase OWNERS
+			// entries after normalization, so no violations are expected.
+			name: "mixed case normalizes",
+			dir:  "mixed-case",
 		},
 		{
-			name:      "missing approver",
-			dir:       "missing-approver",
-			wantCount: 1,
-			wantRole:  approverRole,
-			wantUser:  "someoneelse",
+			name: "missing reviewer",
+			dir:  "missing-reviewer",
+			want: violationsFor("missing-reviewer", Violation{
+				Role:   reviewerRole,
+				User:   "someoneelse",
+				Reason: "not listed under reviewers in OWNERS",
+			}),
 		},
 		{
-			name:      "no owners",
-			dir:       "no-owners",
-			wantCount: 1,
-			wantRole:  reviewerRole,
-			wantUser:  "tallclair",
+			name: "missing approver",
+			dir:  "missing-approver",
+			want: violationsFor("missing-approver", Violation{
+				Role:   approverRole,
+				User:   "someoneelse",
+				Reason: "not listed under approvers in OWNERS",
+			}),
 		},
 		{
-			name:      "no markers",
-			dir:       "no-markers",
-			wantCount: 0,
+			name: "no owners",
+			dir:  "no-owners",
+			want: violationsFor("no-owners",
+				Violation{
+					Role:   reviewerRole,
+					User:   "tallclair",
+					Reason: "OWNERS file not found",
+				},
+				Violation{
+					Role:   approverRole,
+					User:   "dchen1107",
+					Reason: "OWNERS file not found",
+				},
+			),
+		},
+		{
+			name: "no markers",
+			dir:  "no-markers",
 		},
 	}
 
@@ -69,13 +96,7 @@ func TestVerifyKEP(t *testing.T) {
 			kepPath := filepath.Join("testdata", tc.dir, "kep.yaml")
 			violations, err := VerifyKEP(kepPath)
 			require.NoError(t, err)
-			require.Len(t, violations, tc.wantCount, "violations: %v", violations)
-
-			if tc.wantCount == 1 {
-				require.Equal(t, tc.wantRole, violations[0].Role)
-				require.Equal(t, tc.wantUser, violations[0].User)
-				require.Equal(t, kepPath, violations[0].KEPPath)
-			}
+			require.ElementsMatch(t, tc.want, violations, "violations: %v", violations)
 		})
 	}
 }
@@ -84,11 +105,32 @@ func TestVerifyAll(t *testing.T) {
 	violations, err := VerifyAll("testdata")
 	require.NoError(t, err)
 
-	// missing-reviewer, missing-approver, and no-owners each contribute one
-	// violation; valid and no-markers contribute none.
-	require.Len(t, violations, 3, "violations: %v", violations)
+	// Aggregated violations across all fixtures: missing-reviewer and
+	// missing-approver each contribute one, no-owners contributes two, and
+	// valid, mixed-case, and no-markers contribute none.
+	want := make([]Violation, 0, 4)
+	want = append(want, violationsFor("missing-reviewer", Violation{
+		Role:   reviewerRole,
+		User:   "someoneelse",
+		Reason: "not listed under reviewers in OWNERS",
+	})...)
+	want = append(want, violationsFor("missing-approver", Violation{
+		Role:   approverRole,
+		User:   "someoneelse",
+		Reason: "not listed under approvers in OWNERS",
+	})...)
+	want = append(want, violationsFor("no-owners",
+		Violation{
+			Role:   reviewerRole,
+			User:   "tallclair",
+			Reason: "OWNERS file not found",
+		},
+		Violation{
+			Role:   approverRole,
+			User:   "dchen1107",
+			Reason: "OWNERS file not found",
+		},
+	)...)
 
-	for _, v := range violations {
-		require.NotEmpty(t, v.String())
-	}
+	require.ElementsMatch(t, want, violations, "violations: %v", violations)
 }
