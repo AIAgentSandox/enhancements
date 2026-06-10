@@ -115,8 +115,8 @@ func mappingValue(mapping *yaml.Node, key string) *yaml.Node {
 	return nil
 }
 
-// contains reports whether the normalized list includes the normalized user.
-func contains(list []string, user string) bool {
+// containsNormalized reports whether the normalized list includes the normalized user.
+func containsNormalized(list []string, user string) bool {
 	for _, item := range list {
 		if normalizeUser(item) == user {
 			return true
@@ -183,7 +183,7 @@ func VerifyKEP(kepYAMLPath string) ([]Violation, error) {
 
 	var violations []Violation
 	for _, u := range assignedReviewers {
-		if !contains(owners.Reviewers, u) {
+		if !containsNormalized(owners.Reviewers, u) {
 			violations = append(violations, Violation{
 				KEPPath: kepYAMLPath,
 				Role:    reviewerRole,
@@ -193,12 +193,35 @@ func VerifyKEP(kepYAMLPath string) ([]Violation, error) {
 		}
 	}
 	for _, u := range assignedApprovers {
-		if !contains(owners.Approvers, u) {
+		if !containsNormalized(owners.Approvers, u) {
 			violations = append(violations, Violation{
 				KEPPath: kepYAMLPath,
 				Role:    approverRole,
 				User:    u,
 				Reason:  "not listed under approvers in OWNERS",
+			})
+		}
+	}
+
+	// Reverse check: every entry in OWNERS must have a corresponding
+	// annotation in kep.yaml.
+	for _, u := range owners.Reviewers {
+		if !containsNormalized(assignedReviewers, normalizeUser(u)) {
+			violations = append(violations, Violation{
+				KEPPath: kepYAMLPath,
+				Role:    reviewerRole,
+				User:    normalizeUser(u),
+				Reason:  "listed in OWNERS but not annotated as sig-node-assigned-reviewer in kep.yaml",
+			})
+		}
+	}
+	for _, u := range owners.Approvers {
+		if !containsNormalized(assignedApprovers, normalizeUser(u)) {
+			violations = append(violations, Violation{
+				KEPPath: kepYAMLPath,
+				Role:    approverRole,
+				User:    normalizeUser(u),
+				Reason:  "listed in OWNERS but not annotated as sig-node-assigned-approver in kep.yaml",
 			})
 		}
 	}

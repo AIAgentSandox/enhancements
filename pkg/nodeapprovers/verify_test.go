@@ -54,20 +54,34 @@ func TestVerifyKEP(t *testing.T) {
 		{
 			name: "missing reviewer",
 			dir:  "missing-reviewer",
-			want: violationsFor("missing-reviewer", Violation{
-				Role:   reviewerRole,
-				User:   "someoneelse",
-				Reason: "not listed under reviewers in OWNERS",
-			}),
+			want: violationsFor("missing-reviewer",
+				Violation{
+					Role:   reviewerRole,
+					User:   "someoneelse",
+					Reason: "not listed under reviewers in OWNERS",
+				},
+				Violation{
+					Role:   reviewerRole,
+					User:   "tallclair",
+					Reason: "listed in OWNERS but not annotated as sig-node-assigned-reviewer in kep.yaml",
+				},
+			),
 		},
 		{
 			name: "missing approver",
 			dir:  "missing-approver",
-			want: violationsFor("missing-approver", Violation{
-				Role:   approverRole,
-				User:   "someoneelse",
-				Reason: "not listed under approvers in OWNERS",
-			}),
+			want: violationsFor("missing-approver",
+				Violation{
+					Role:   approverRole,
+					User:   "someoneelse",
+					Reason: "not listed under approvers in OWNERS",
+				},
+				Violation{
+					Role:   approverRole,
+					User:   "tallclair",
+					Reason: "listed in OWNERS but not annotated as sig-node-assigned-approver in kep.yaml",
+				},
+			),
 		},
 		{
 			name: "no owners",
@@ -89,6 +103,22 @@ func TestVerifyKEP(t *testing.T) {
 			name: "no markers",
 			dir:  "no-markers",
 		},
+		{
+			name: "extra in owners",
+			dir:  "extra-in-owners",
+			want: violationsFor("extra-in-owners",
+				Violation{
+					Role:   reviewerRole,
+					User:   "extraperson",
+					Reason: "listed in OWNERS but not annotated as sig-node-assigned-reviewer in kep.yaml",
+				},
+				Violation{
+					Role:   approverRole,
+					User:   "anotherperson",
+					Reason: "listed in OWNERS but not annotated as sig-node-assigned-approver in kep.yaml",
+				},
+			),
+		},
 	}
 
 	for _, tc := range testcases {
@@ -106,19 +136,34 @@ func TestVerifyAll(t *testing.T) {
 	require.NoError(t, err)
 
 	// Aggregated violations across all fixtures: missing-reviewer and
-	// missing-approver each contribute one, no-owners contributes two, and
-	// valid, mixed-case, and no-markers contribute none.
-	want := make([]Violation, 0, 4)
-	want = append(want, violationsFor("missing-reviewer", Violation{
-		Role:   reviewerRole,
-		User:   "someoneelse",
-		Reason: "not listed under reviewers in OWNERS",
-	})...)
-	want = append(want, violationsFor("missing-approver", Violation{
-		Role:   approverRole,
-		User:   "someoneelse",
-		Reason: "not listed under approvers in OWNERS",
-	})...)
+	// missing-approver each contribute one, no-owners contributes two,
+	// extra-in-owners contributes two, and valid, mixed-case, and no-markers
+	// contribute none.
+	want := make([]Violation, 0, 8)
+	want = append(want, violationsFor("missing-reviewer",
+		Violation{
+			Role:   reviewerRole,
+			User:   "someoneelse",
+			Reason: "not listed under reviewers in OWNERS",
+		},
+		Violation{
+			Role:   reviewerRole,
+			User:   "tallclair",
+			Reason: "listed in OWNERS but not annotated as sig-node-assigned-reviewer in kep.yaml",
+		},
+	)...)
+	want = append(want, violationsFor("missing-approver",
+		Violation{
+			Role:   approverRole,
+			User:   "someoneelse",
+			Reason: "not listed under approvers in OWNERS",
+		},
+		Violation{
+			Role:   approverRole,
+			User:   "tallclair",
+			Reason: "listed in OWNERS but not annotated as sig-node-assigned-approver in kep.yaml",
+		},
+	)...)
 	want = append(want, violationsFor("no-owners",
 		Violation{
 			Role:   reviewerRole,
@@ -129,6 +174,18 @@ func TestVerifyAll(t *testing.T) {
 			Role:   approverRole,
 			User:   "dchen1107",
 			Reason: "OWNERS file not found",
+		},
+	)...)
+	want = append(want, violationsFor("extra-in-owners",
+		Violation{
+			Role:   reviewerRole,
+			User:   "extraperson",
+			Reason: "listed in OWNERS but not annotated as sig-node-assigned-reviewer in kep.yaml",
+		},
+		Violation{
+			Role:   approverRole,
+			User:   "anotherperson",
+			Reason: "listed in OWNERS but not annotated as sig-node-assigned-approver in kep.yaml",
 		},
 	)...)
 
