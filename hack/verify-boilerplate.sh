@@ -18,6 +18,11 @@ set -o errexit
 set -o nounset
 set -o pipefail
 
+# cd to the repo root so the bin/ cache, the directory walk, and the relative
+# --skip path below are all anchored to the repo root regardless of the caller's
+# working directory.
+cd "$(git rev-parse --show-toplevel)"
+
 VERSION=v0.2.6
 URL_BASE=https://raw.githubusercontent.com/kubernetes/repo-infra
 URL=$URL_BASE/$VERSION/hack/verify_boilerplate.py
