@@ -4,7 +4,7 @@
 
 ### Task 1: update enhancements boilerplates
 
-- [ ] # Update boilerplate verification to support no-year copyright headers     
+- [x] # Update boilerplate verification to support no-year copyright headers     
 
 ## Motivation                                                                     
    
@@ -23,25 +23,25 @@
    
 ### Task 1. Identify the correct upstream version
                                                                                  
-  - [ ] Check the latest tag/commit on kubernetes/repo-infra that supports optional
+  - [x] Check the latest tag/commit on kubernetes/repo-infra that supports optional
   year in copyright                                                              
-  - [ ] Verify backward compatibility — existing files with Copyright 2021 should
+  - [x] Verify backward compatibility — existing files with Copyright 2021 should
   still pass                                                                     
                   
 ### Task 2. Bump the script version                                                
                   
-  - [ ] Update VERSION=v0.2.0 in hack/verify-boilerplate.sh to the identified version
-  - [ ] Delete bin/verify_boilerplate.py so it gets re-downloaded on next run
+  - [x] Update VERSION=v0.2.0 in hack/verify-boilerplate.sh to the identified version
+  - [x] Delete bin/verify_boilerplate.py so it gets re-downloaded on next run
                                                                                  
 ### Task 3. Update boilerplate templates if needed
                                                                                  
-  - [ ] Check if the new script version requires template changes (e.g., making YEAR 
+  - [x] Check if the new script version requires template changes (e.g., making YEAR 
   optional in hack/boilerplate/boilerplate.go.txt and
   hack/boilerplate/boilerplate.sh.txt)                                           
-  - [ ] Update templates if the new script expects a different format
+  - [x] Update templates if the new script expects a different format
                                                                                  
 ### Task 4. Validate
                                                                                  
-  - [ ] Run hack/verify-boilerplate.sh — all files should pass (both old files with  
+  - [x] Run hack/verify-boilerplate.sh — all files should pass (both old files with  
   years and new files without)
-  - [ ] Run make verify to confirm nothing else breaks                               
+  - [x] Run make verify to confirm nothing else breaks                               
