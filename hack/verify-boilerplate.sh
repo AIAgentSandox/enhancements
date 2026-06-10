@@ -27,7 +27,11 @@ VERSION=v0.2.6
 URL_BASE=https://raw.githubusercontent.com/kubernetes/repo-infra
 URL=$URL_BASE/$VERSION/hack/verify_boilerplate.py
 BIN_DIR=bin
-SCRIPT=$BIN_DIR/verify_boilerplate.py
+# Include the version in the cached filename so a version bump forces a fresh
+# download. bin/ is gitignored and persists across runs/branches, so a plain
+# fixed name would silently reuse a stale older script (e.g. a cached v0.2.0
+# that still requires the YEAR placeholder this change removed).
+SCRIPT=$BIN_DIR/verify_boilerplate-$VERSION.py
 
 if [[ ! -f $SCRIPT ]]; then
     mkdir -p $BIN_DIR
