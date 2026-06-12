@@ -18,7 +18,7 @@ set -o errexit
 set -o nounset
 set -o pipefail
 
-VERSION=v2.12.2
+VERSION=v2.13.2
 URL_BASE=https://raw.githubusercontent.com/golangci/golangci-lint
 URL=$URL_BASE/$VERSION/install.sh
 
@@ -27,9 +27,12 @@ if [[ ! -f .golangci.yml ]]; then
     exit 1
 fi
 
-if ! command -v golangci-lint; then
+# Install the pinned version unless it is already the one on PATH. An older
+# golangci-lint fails with "could not load export data" when it type-checks
+# packages built by a newer Go toolchain, so the version has to match.
+if [[ "$(golangci-lint version --short 2>/dev/null)" != "${VERSION#v}" ]]; then
     curl -sfL $URL | sh -s $VERSION
-    PATH=$PATH:bin
+    PATH=bin:$PATH
 fi
 
 golangci-lint version
