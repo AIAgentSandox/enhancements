@@ -10,6 +10,7 @@ participating-sigs:
 reviewers:
   - "@vishnu"
 approvers:
+  - "@sig-node-tech-leads"
   - "@dawnchen"
 stage: stable
 latest-milestone: "v1.22"

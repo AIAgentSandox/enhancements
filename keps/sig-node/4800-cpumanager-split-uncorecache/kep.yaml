@@ -13,7 +13,8 @@ reviewers:
   - "@kannon92"
   - "@kad"
 approvers:
-  - "@ffromani" # sig-node-assigned-approver
+  - "@sig-node-tech-leads"
+  - "@ffromani"
   - "@klueska"
 
 see-also: 

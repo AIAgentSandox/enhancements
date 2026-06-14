@@ -11,7 +11,8 @@ reviewers:
   - "@klueska"
   - "@ffromani"
 approvers:
-  - "@klueska" # sig-node-assigned-approver
+  - "@sig-node-tech-leads"
+  - "@klueska"
 see-also: 
   - "keps/sig-node/2625-cpumanager-policies-thread-placement/"
   - "keps/sig-node/2902-cpumanager-distribute-cpus-policy-option/"

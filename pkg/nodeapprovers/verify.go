@@ -354,6 +354,9 @@ func approverEntries(kepYAMLPath string) (stage string, entries []approverEntry,
 //     approver may carry the "# sig-node-assigned-approver" marker.
 //   - non-alpha: a sig-node-tech-leads member OR an approver marked
 //     "# sig-node-assigned-approver" MUST be listed.
+//
+// Listing the "@sig-node-tech-leads" group alias directly under approvers also
+// satisfies the tech-lead requirement.
 func VerifyTechLeadApprovers(kepYAMLPath string, techLeads map[string]bool) ([]Violation, error) {
 	stage, entries, err := approverEntries(kepYAMLPath)
 	if err != nil {
@@ -371,7 +374,9 @@ func VerifyTechLeadApprovers(kepYAMLPath string, techLeads map[string]bool) ([]V
 	hasTechLead := false
 	hasMarked := false
 	for _, e := range entries {
-		if techLeads[e.User] {
+		// An individual sig-node-tech-leads member, or the group alias itself
+		// (e.g. "@sig-node-tech-leads"), both satisfy the tech-lead requirement.
+		if techLeads[e.User] || e.User == techLeadsAlias {
 			hasTechLead = true
 		}
 		if e.Marked {

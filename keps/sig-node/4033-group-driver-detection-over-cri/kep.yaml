@@ -11,6 +11,7 @@ creation-date: 2023-05-25
 reviewers:
   - "@mrunalp"
 approvers:
+  - "@sig-node-tech-leads"
   - "@sig-node-leads"
 
 see-also: []

@@ -266,6 +266,14 @@ func TestVerifyTechLeadApprovers(t *testing.T) {
 			),
 		},
 		{
+			name: "alpha listing the sig-node-tech-leads alias is valid",
+			dir:  "alpha-alias-valid",
+		},
+		{
+			name: "beta listing the sig-node-tech-leads alias is valid",
+			dir:  "beta-alias-valid",
+		},
+		{
 			name: "beta with tech lead is valid",
 			dir:  "beta-techlead-valid",
 		},

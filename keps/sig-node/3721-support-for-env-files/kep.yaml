@@ -13,7 +13,8 @@ reviewers:
   - "@sftim"
   - "@SergeyKanzhelev"
 approvers:
-  - "@SergeyKanzhelev" # sig-node-assigned-approver
+  - "@sig-node-tech-leads"
+  - "@SergeyKanzhelev"
 see-also:
 
 # The target maturity stage in the current dev cycle for this KEP.

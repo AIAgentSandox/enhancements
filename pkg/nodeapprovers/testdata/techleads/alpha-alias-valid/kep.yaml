@@ -1,0 +1,6 @@
+title: Alpha Alias Valid
+kep-number: 8
+owning-sig: sig-node
+stage: alpha
+approvers:
+  - "@sig-node-tech-leads"

@@ -12,7 +12,7 @@ reviewers:
   - "@mikebrow" # sig-node-assigned-reviewer
 approvers:
   - "@dchen1107"
-  - "@SergeyKanzhelev" # sig-node-assigned-approver
+  - "@SergeyKanzhelev"
 
 # The target maturity stage in the current dev cycle for this KEP.
 # If the purpose of this KEP is to deprecate a user-visible feature
