@@ -80,19 +80,19 @@ alongside it.
 - Create: `pkg/nodeapprovers/testdata/techleads/beta-missing/kep.yaml`
 - Create: `pkg/nodeapprovers/testdata/techleads/no-approvers/kep.yaml`
 
-- [ ] Add a constant for the tech-leads alias name, e.g.
+- [x] Add a constant for the tech-leads alias name, e.g.
   `techLeadsAlias = "sig-node-tech-leads"`, and (reusing the existing
   `approverMarker = "sig-node-assigned-approver"`) keep the marker logic shared.
-- [ ] Add a function `loadTechLeads(ownersAliasesPath string) (map[string]bool, error)`
+- [x] Add a function `loadTechLeads(ownersAliasesPath string) (map[string]bool, error)`
   that parses `OWNERS_ALIASES` (YAML shape `aliases: map[string][]string`) and
   returns a set of normalized usernames for the `sig-node-tech-leads` group.
   Return an error if the alias is absent (so misconfiguration is loud).
-- [ ] Add a helper `approverEntries(kepYAMLPath string) (stage string, entries []approverEntry, err error)`
+- [x] Add a helper `approverEntries(kepYAMLPath string) (stage string, entries []approverEntry, err error)`
   that parses the kep.yaml YAML node tree, reads the top-level `stage` scalar, and
   returns the `approvers` sequence as `{User string; Marked bool}` entries, where
   `User` is normalized and `Marked` is true when the entry's `LineComment` matches
   `approverMarker`. Reuse `mappingValue`, `markerOf`, and `normalizeUser`.
-- [ ] Add `VerifyTechLeadApprovers(kepYAMLPath string, techLeads map[string]bool) ([]Violation, error)`
+- [x] Add `VerifyTechLeadApprovers(kepYAMLPath string, techLeads map[string]bool) ([]Violation, error)`
   implementing the rules. Emit `Violation`s with `Role = approverRole` and clear
   `Reason` strings:
   - No approvers listed → `Reason: "no approvers listed"`.
@@ -102,24 +102,24 @@ alongside it.
       user with `Reason: "alpha-stage KEP must not use # sig-node-assigned-approver marker"`.
   - `stage != "alpha"`: neither a tech-lead nor a marked approver present →
     `Reason: "non-alpha KEP must list a sig-node-tech-leads member or an approver marked # sig-node-assigned-approver"`.
-- [ ] Add `VerifyAllTechLeadApprovers(kepsRootDir, ownersAliasesPath string) ([]Violation, error)`
+- [x] Add `VerifyAllTechLeadApprovers(kepsRootDir, ownersAliasesPath string) ([]Violation, error)`
   that loads the tech-leads set once, then `filepath.WalkDir`s `kepsRootDir` for
   `kep.yaml` files (mirroring `VerifyAll`) and aggregates violations.
-- [ ] Create the `testdata/techleads/OWNERS_ALIASES` fixture defining
+- [x] Create the `testdata/techleads/OWNERS_ALIASES` fixture defining
   `sig-node-tech-leads` with a couple of handles (e.g. `dchen1107`, `mrunalp`).
-- [ ] Create the per-case `kep.yaml` fixtures listed above covering: alpha with a
+- [x] Create the per-case `kep.yaml` fixtures listed above covering: alpha with a
   tech lead (valid), alpha missing a tech lead (violation), alpha with a tech lead
   but an extra approver wrongly marked `# sig-node-assigned-approver` (violation),
   beta with a tech lead (valid), beta with a non-tech-lead marked approver (valid),
   beta with neither (violation), and a KEP with an empty/absent approvers list
   (violation).
-- [ ] Add table-driven unit tests in `verify_test.go` (`TestVerifyTechLeadApprovers`
+- [x] Add table-driven unit tests in `verify_test.go` (`TestVerifyTechLeadApprovers`
   and `TestVerifyAllTechLeadApprovers`) using `require.ElementsMatch`, following the
   existing `violationsFor` helper pattern (add an analogous helper if the fixture
   layout differs).
-- [ ] Run `go test ./pkg/nodeapprovers/...` and `go vet ./pkg/nodeapprovers/...`;
+- [x] Run `go test ./pkg/nodeapprovers/...` and `go vet ./pkg/nodeapprovers/...`;
   fix until green.
-- [ ] Commit with message: `feat: add sig-node tech-lead approver verification`
+- [x] Commit with message: `feat: add sig-node tech-lead approver verification`
 
 ### Task 3: Wire verification into CI integration test over the real keps tree
 

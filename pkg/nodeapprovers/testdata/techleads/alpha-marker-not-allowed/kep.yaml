@@ -1,0 +1,7 @@
+title: Alpha Marker Not Allowed
+kep-number: 3
+owning-sig: sig-node
+stage: alpha
+approvers:
+  - "@dchen1107"
+  - "@someoneelse" # sig-node-assigned-approver

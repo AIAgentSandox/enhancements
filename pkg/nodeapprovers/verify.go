@@ -38,6 +38,10 @@ const (
 
 	reviewerRole = "reviewer"
 	approverRole = "approver"
+
+	// techLeadsAlias is the OWNERS_ALIASES group name whose members are SIG
+	// Node tech leads.
+	techLeadsAlias = "sig-node-tech-leads"
 )
 
 // Violation describes a single assigned reviewer/approver that is not correctly
@@ -245,6 +249,189 @@ func VerifyAll(rootDir string) ([]Violation, error) {
 		}
 
 		v, err := VerifyKEP(path)
+		if err != nil {
+			return err
+		}
+		violations = append(violations, v...)
+
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return violations, nil
+}
+
+// ownersAliasesFile is the minimal shape of an OWNERS_ALIASES file needed to
+// resolve the sig-node-tech-leads group.
+type ownersAliasesFile struct {
+	Aliases map[string][]string `yaml:"aliases"`
+}
+
+// loadTechLeads parses an OWNERS_ALIASES file and returns the set of normalized
+// usernames belonging to the sig-node-tech-leads group. It returns an error if
+// the alias is absent, so a misconfigured OWNERS_ALIASES fails loudly.
+func loadTechLeads(ownersAliasesPath string) (map[string]bool, error) {
+	data, err := os.ReadFile(ownersAliasesPath)
+	if err != nil {
+		return nil, fmt.Errorf("reading %s: %w", ownersAliasesPath, err)
+	}
+
+	var aliases ownersAliasesFile
+	if err := yaml.Unmarshal(data, &aliases); err != nil {
+		return nil, fmt.Errorf("parsing %s: %w", ownersAliasesPath, err)
+	}
+
+	members, ok := aliases.Aliases[techLeadsAlias]
+	if !ok {
+		return nil, fmt.Errorf("%s: alias %q not found", ownersAliasesPath, techLeadsAlias)
+	}
+
+	techLeads := make(map[string]bool, len(members))
+	for _, m := range members {
+		techLeads[normalizeUser(m)] = true
+	}
+
+	return techLeads, nil
+}
+
+// approverEntry is a single approver listed under approvers: in a kep.yaml,
+// with its normalized handle and whether it carries the
+// "# sig-node-assigned-approver" inline marker.
+type approverEntry struct {
+	User   string
+	Marked bool
+}
+
+// approverEntries parses a kep.yaml and returns its top-level stage scalar and
+// the approvers sequence as approverEntry values.
+func approverEntries(kepYAMLPath string) (stage string, entries []approverEntry, err error) {
+	data, err := os.ReadFile(kepYAMLPath)
+	if err != nil {
+		return "", nil, fmt.Errorf("reading %s: %w", kepYAMLPath, err)
+	}
+
+	var doc yaml.Node
+	if err := yaml.Unmarshal(data, &doc); err != nil {
+		return "", nil, fmt.Errorf("parsing %s: %w", kepYAMLPath, err)
+	}
+
+	// Unwrap the document node to get the top-level mapping.
+	var root *yaml.Node
+	if doc.Kind == yaml.DocumentNode && len(doc.Content) > 0 {
+		root = doc.Content[0]
+	} else {
+		root = &doc
+	}
+
+	if stageNode := mappingValue(root, "stage"); stageNode != nil && stageNode.Kind == yaml.ScalarNode {
+		stage = strings.TrimSpace(stageNode.Value)
+	}
+
+	approvers := mappingValue(root, "approvers")
+	if approvers == nil || approvers.Kind != yaml.SequenceNode {
+		return stage, nil, nil
+	}
+
+	for _, item := range approvers.Content {
+		if item.Kind != yaml.ScalarNode {
+			continue
+		}
+		entries = append(entries, approverEntry{
+			User:   normalizeUser(item.Value),
+			Marked: markerOf(item.LineComment) == approverMarker,
+		})
+	}
+
+	return stage, entries, nil
+}
+
+// VerifyTechLeadApprovers verifies that a single kep.yaml lists an acceptable
+// approver per the stage-dependent rules and returns any violations found.
+//
+//   - alpha: at least one sig-node-tech-leads member MUST be listed, and no
+//     approver may carry the "# sig-node-assigned-approver" marker.
+//   - non-alpha: a sig-node-tech-leads member OR an approver marked
+//     "# sig-node-assigned-approver" MUST be listed.
+func VerifyTechLeadApprovers(kepYAMLPath string, techLeads map[string]bool) ([]Violation, error) {
+	stage, entries, err := approverEntries(kepYAMLPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(entries) == 0 {
+		return []Violation{{
+			KEPPath: kepYAMLPath,
+			Role:    approverRole,
+			Reason:  "no approvers listed",
+		}}, nil
+	}
+
+	hasTechLead := false
+	hasMarked := false
+	for _, e := range entries {
+		if techLeads[e.User] {
+			hasTechLead = true
+		}
+		if e.Marked {
+			hasMarked = true
+		}
+	}
+
+	var violations []Violation
+	if stage == "alpha" {
+		if !hasTechLead {
+			violations = append(violations, Violation{
+				KEPPath: kepYAMLPath,
+				Role:    approverRole,
+				Reason:  "alpha-stage KEP must list at least one sig-node-tech-leads member as approver",
+			})
+		}
+		for _, e := range entries {
+			if e.Marked {
+				violations = append(violations, Violation{
+					KEPPath: kepYAMLPath,
+					Role:    approverRole,
+					User:    e.User,
+					Reason:  "alpha-stage KEP must not use # sig-node-assigned-approver marker",
+				})
+			}
+		}
+		return violations, nil
+	}
+
+	if !hasTechLead && !hasMarked {
+		violations = append(violations, Violation{
+			KEPPath: kepYAMLPath,
+			Role:    approverRole,
+			Reason:  "non-alpha KEP must list a sig-node-tech-leads member or an approver marked # sig-node-assigned-approver",
+		})
+	}
+
+	return violations, nil
+}
+
+// VerifyAllTechLeadApprovers loads the sig-node-tech-leads set from
+// ownersAliasesPath, then walks kepsRootDir for kep.yaml files and aggregates
+// the tech-lead approver violations from each.
+func VerifyAllTechLeadApprovers(kepsRootDir, ownersAliasesPath string) ([]Violation, error) {
+	techLeads, err := loadTechLeads(ownersAliasesPath)
+	if err != nil {
+		return nil, err
+	}
+
+	var violations []Violation
+
+	err = filepath.WalkDir(kepsRootDir, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if d.IsDir() || d.Name() != "kep.yaml" {
+			return nil
+		}
+
+		v, err := VerifyTechLeadApprovers(path, techLeads)
 		if err != nil {
 			return err
 		}

@@ -214,3 +214,128 @@ func TestVerifyAll(t *testing.T) {
 
 	require.ElementsMatch(t, want, violations, "violations: %v", violations)
 }
+
+// techLeadsFixture is the set of sig-node-tech-leads members defined in
+// testdata/techleads/OWNERS_ALIASES.
+var techLeadsFixture = map[string]bool{
+	"dchen1107": true,
+	"mrunalp":   true,
+}
+
+// techLeadViolationsFor returns the expected violations for a fixture directory
+// under testdata/techleads, with KEPPath filled in.
+func techLeadViolationsFor(dir string, partials ...Violation) []Violation {
+	kepPath := filepath.Join("testdata", "techleads", dir, "kep.yaml")
+	out := make([]Violation, 0, len(partials))
+	for _, p := range partials {
+		p.KEPPath = kepPath
+		out = append(out, p)
+	}
+	return out
+}
+
+func TestVerifyTechLeadApprovers(t *testing.T) {
+	testcases := []struct {
+		name string
+		dir  string
+		want []Violation
+	}{
+		{
+			name: "alpha with tech lead is valid",
+			dir:  "alpha-valid",
+		},
+		{
+			name: "alpha missing tech lead",
+			dir:  "alpha-missing-techlead",
+			want: techLeadViolationsFor("alpha-missing-techlead",
+				Violation{
+					Role:   approverRole,
+					Reason: "alpha-stage KEP must list at least one sig-node-tech-leads member as approver",
+				},
+			),
+		},
+		{
+			name: "alpha with disallowed marker",
+			dir:  "alpha-marker-not-allowed",
+			want: techLeadViolationsFor("alpha-marker-not-allowed",
+				Violation{
+					Role:   approverRole,
+					User:   "someoneelse",
+					Reason: "alpha-stage KEP must not use # sig-node-assigned-approver marker",
+				},
+			),
+		},
+		{
+			name: "beta with tech lead is valid",
+			dir:  "beta-techlead-valid",
+		},
+		{
+			name: "beta with marked approver is valid",
+			dir:  "beta-marker-valid",
+		},
+		{
+			name: "beta with neither",
+			dir:  "beta-missing",
+			want: techLeadViolationsFor("beta-missing",
+				Violation{
+					Role:   approverRole,
+					Reason: "non-alpha KEP must list a sig-node-tech-leads member or an approver marked # sig-node-assigned-approver",
+				},
+			),
+		},
+		{
+			name: "no approvers",
+			dir:  "no-approvers",
+			want: techLeadViolationsFor("no-approvers",
+				Violation{
+					Role:   approverRole,
+					Reason: "no approvers listed",
+				},
+			),
+		},
+	}
+
+	for _, tc := range testcases {
+		t.Run(tc.name, func(t *testing.T) {
+			kepPath := filepath.Join("testdata", "techleads", tc.dir, "kep.yaml")
+			violations, err := VerifyTechLeadApprovers(kepPath, techLeadsFixture)
+			require.NoError(t, err)
+			require.ElementsMatch(t, tc.want, violations, "violations: %v", violations)
+		})
+	}
+}
+
+func TestVerifyAllTechLeadApprovers(t *testing.T) {
+	root := filepath.Join("testdata", "techleads")
+	violations, err := VerifyAllTechLeadApprovers(root, filepath.Join(root, "OWNERS_ALIASES"))
+	require.NoError(t, err)
+
+	want := make([]Violation, 0, 4)
+	want = append(want, techLeadViolationsFor("alpha-missing-techlead",
+		Violation{
+			Role:   approverRole,
+			Reason: "alpha-stage KEP must list at least one sig-node-tech-leads member as approver",
+		},
+	)...)
+	want = append(want, techLeadViolationsFor("alpha-marker-not-allowed",
+		Violation{
+			Role:   approverRole,
+			User:   "someoneelse",
+			Reason: "alpha-stage KEP must not use # sig-node-assigned-approver marker",
+		},
+	)...)
+	want = append(want, techLeadViolationsFor("beta-missing",
+		Violation{
+			Role:   approverRole,
+			Reason: "non-alpha KEP must list a sig-node-tech-leads member or an approver marked # sig-node-assigned-approver",
+		},
+	)...)
+	want = append(want, techLeadViolationsFor("no-approvers",
+		Violation{
+			Role:   approverRole,
+			Reason: "no approvers listed",
+		},
+	)...)
+
+	require.ElementsMatch(t, want, violations, "violations: %v", violations)
+}
