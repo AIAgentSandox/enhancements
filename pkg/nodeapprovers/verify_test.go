@@ -17,6 +17,7 @@ limitations under the License.
 package nodeapprovers
 
 import (
+	"os"
 	"path/filepath"
 	"testing"
 
@@ -292,6 +293,16 @@ func TestVerifyTechLeadApprovers(t *testing.T) {
 			),
 		},
 		{
+			name: "missing stage is treated as non-alpha",
+			dir:  "no-stage",
+			want: techLeadViolationsFor("no-stage",
+				Violation{
+					Role:   approverRole,
+					Reason: "non-alpha KEP must list a sig-node-tech-leads member or an approver marked # sig-node-assigned-approver",
+				},
+			),
+		},
+		{
 			name: "no approvers",
 			dir:  "no-approvers",
 			want: techLeadViolationsFor("no-approvers",
@@ -338,6 +349,12 @@ func TestVerifyAllTechLeadApprovers(t *testing.T) {
 			Reason: "non-alpha KEP must list a sig-node-tech-leads member or an approver marked # sig-node-assigned-approver",
 		},
 	)...)
+	want = append(want, techLeadViolationsFor("no-stage",
+		Violation{
+			Role:   approverRole,
+			Reason: "non-alpha KEP must list a sig-node-tech-leads member or an approver marked # sig-node-assigned-approver",
+		},
+	)...)
 	want = append(want, techLeadViolationsFor("no-approvers",
 		Violation{
 			Role:   approverRole,
@@ -346,4 +363,41 @@ func TestVerifyAllTechLeadApprovers(t *testing.T) {
 	)...)
 
 	require.ElementsMatch(t, want, violations, "violations: %v", violations)
+}
+
+func TestLoadTechLeads(t *testing.T) {
+	t.Run("valid file loads the alias members and stays in sync with the fixture", func(t *testing.T) {
+		got, err := loadTechLeads(filepath.Join("testdata", "techleads", "OWNERS_ALIASES"))
+		require.NoError(t, err)
+		// Guards against the hardcoded techLeadsFixture silently drifting from
+		// the OWNERS_ALIASES fixture the integration-style test loads.
+		require.Equal(t, techLeadsFixture, got)
+	})
+
+	t.Run("missing file errors", func(t *testing.T) {
+		_, err := loadTechLeads(filepath.Join("testdata", "techleads", "does-not-exist"))
+		require.Error(t, err)
+	})
+
+	t.Run("missing alias errors loudly", func(t *testing.T) {
+		path := filepath.Join(t.TempDir(), "OWNERS_ALIASES")
+		require.NoError(t, os.WriteFile(path, []byte("aliases:\n  some-other-group:\n    - alice\n"), 0o644))
+		_, err := loadTechLeads(path)
+		require.Error(t, err)
+	})
+
+	t.Run("empty alias membership errors loudly", func(t *testing.T) {
+		path := filepath.Join(t.TempDir(), "OWNERS_ALIASES")
+		require.NoError(t, os.WriteFile(path, []byte("aliases:\n  sig-node-tech-leads: []\n"), 0o644))
+		_, err := loadTechLeads(path)
+		require.Error(t, err)
+	})
+
+	t.Run("malformed yaml errors", func(t *testing.T) {
+		path := filepath.Join(t.TempDir(), "OWNERS_ALIASES")
+		// A tab used for indentation is invalid YAML.
+		require.NoError(t, os.WriteFile(path, []byte("aliases:\n\tsig-node-tech-leads:\n"), 0o644))
+		_, err := loadTechLeads(path)
+		require.Error(t, err)
+	})
 }

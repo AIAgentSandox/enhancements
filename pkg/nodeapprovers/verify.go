@@ -59,6 +59,11 @@ type Violation struct {
 
 // String returns a readable, single-line representation of the violation.
 func (v Violation) String() string {
+	// File-level violations (e.g. "no approvers listed") carry no specific user;
+	// omit the empty handle so the message reads cleanly.
+	if v.User == "" {
+		return fmt.Sprintf("%s: %s %s", v.KEPPath, v.Role, v.Reason)
+	}
 	return fmt.Sprintf("%s: assigned %s %q %s", v.KEPPath, v.Role, v.User, v.Reason)
 }
 
@@ -103,6 +108,56 @@ func assignedUsers(seq *yaml.Node, marker string) []string {
 	return users
 }
 
+// parseKEPRoot reads a kep.yaml file and returns its top-level mapping node,
+// unwrapping the surrounding document node. Callers must tolerate a non-mapping
+// node (e.g. for an empty file); mappingValue returns nil for any lookup in that
+// case.
+func parseKEPRoot(kepYAMLPath string) (*yaml.Node, error) {
+	data, err := os.ReadFile(kepYAMLPath)
+	if err != nil {
+		return nil, fmt.Errorf("reading %s: %w", kepYAMLPath, err)
+	}
+
+	var doc yaml.Node
+	if err := yaml.Unmarshal(data, &doc); err != nil {
+		return nil, fmt.Errorf("parsing %s: %w", kepYAMLPath, err)
+	}
+
+	if doc.Kind == yaml.DocumentNode && len(doc.Content) > 0 {
+		return doc.Content[0], nil
+	}
+
+	return &doc, nil
+}
+
+// walkKEPs walks rootDir for files named kep.yaml and aggregates the violations
+// returned by verify for each.
+func walkKEPs(rootDir string, verify func(path string) ([]Violation, error)) ([]Violation, error) {
+	var violations []Violation
+
+	err := filepath.WalkDir(rootDir, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if d.IsDir() || d.Name() != "kep.yaml" {
+			return nil
+		}
+
+		v, err := verify(path)
+		if err != nil {
+			return err
+		}
+		violations = append(violations, v...)
+
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return violations, nil
+}
+
 // mappingValue returns the value node for the given key in a mapping node, or
 // nil if the key is absent or the node is not a mapping.
 func mappingValue(mapping *yaml.Node, key string) *yaml.Node {
@@ -132,22 +187,9 @@ func containsNormalized(list []string, user string) bool {
 
 // VerifyKEP verifies a single kep.yaml file and returns any violations found.
 func VerifyKEP(kepYAMLPath string) ([]Violation, error) {
-	data, err := os.ReadFile(kepYAMLPath)
+	root, err := parseKEPRoot(kepYAMLPath)
 	if err != nil {
-		return nil, fmt.Errorf("reading %s: %w", kepYAMLPath, err)
-	}
-
-	var doc yaml.Node
-	if err := yaml.Unmarshal(data, &doc); err != nil {
-		return nil, fmt.Errorf("parsing %s: %w", kepYAMLPath, err)
-	}
-
-	// Unwrap the document node to get the top-level mapping.
-	var root *yaml.Node
-	if doc.Kind == yaml.DocumentNode && len(doc.Content) > 0 {
-		root = doc.Content[0]
-	} else {
-		root = &doc
+		return nil, err
 	}
 
 	assignedReviewers := assignedUsers(mappingValue(root, "reviewers"), reviewerMarker)
@@ -238,29 +280,7 @@ func VerifyKEP(kepYAMLPath string) ([]Violation, error) {
 // VerifyAll walks rootDir (typically the repo's keps/ directory) for files named
 // kep.yaml and aggregates the violations from each.
 func VerifyAll(rootDir string) ([]Violation, error) {
-	var violations []Violation
-
-	err := filepath.WalkDir(rootDir, func(path string, d fs.DirEntry, err error) error {
-		if err != nil {
-			return err
-		}
-		if d.IsDir() || d.Name() != "kep.yaml" {
-			return nil
-		}
-
-		v, err := VerifyKEP(path)
-		if err != nil {
-			return err
-		}
-		violations = append(violations, v...)
-
-		return nil
-	})
-	if err != nil {
-		return nil, err
-	}
-
-	return violations, nil
+	return walkKEPs(rootDir, VerifyKEP)
 }
 
 // ownersAliasesFile is the minimal shape of an OWNERS_ALIASES file needed to
@@ -293,6 +313,13 @@ func loadTechLeads(ownersAliasesPath string) (map[string]bool, error) {
 		techLeads[normalizeUser(m)] = true
 	}
 
+	// An empty membership set would silently let any KEP listing the
+	// "@sig-node-tech-leads" alias pass while no real tech lead is enforced;
+	// fail loudly instead.
+	if len(techLeads) == 0 {
+		return nil, fmt.Errorf("%s: alias %q has no members", ownersAliasesPath, techLeadsAlias)
+	}
+
 	return techLeads, nil
 }
 
@@ -307,22 +334,9 @@ type approverEntry struct {
 // approverEntries parses a kep.yaml and returns its top-level stage scalar and
 // the approvers sequence as approverEntry values.
 func approverEntries(kepYAMLPath string) (stage string, entries []approverEntry, err error) {
-	data, err := os.ReadFile(kepYAMLPath)
+	root, err := parseKEPRoot(kepYAMLPath)
 	if err != nil {
-		return "", nil, fmt.Errorf("reading %s: %w", kepYAMLPath, err)
-	}
-
-	var doc yaml.Node
-	if err := yaml.Unmarshal(data, &doc); err != nil {
-		return "", nil, fmt.Errorf("parsing %s: %w", kepYAMLPath, err)
-	}
-
-	// Unwrap the document node to get the top-level mapping.
-	var root *yaml.Node
-	if doc.Kind == yaml.DocumentNode && len(doc.Content) > 0 {
-		root = doc.Content[0]
-	} else {
-		root = &doc
+		return "", nil, err
 	}
 
 	if stageNode := mappingValue(root, "stage"); stageNode != nil && stageNode.Kind == yaml.ScalarNode {
@@ -426,27 +440,7 @@ func VerifyAllTechLeadApprovers(kepsRootDir, ownersAliasesPath string) ([]Violat
 		return nil, err
 	}
 
-	var violations []Violation
-
-	err = filepath.WalkDir(kepsRootDir, func(path string, d fs.DirEntry, err error) error {
-		if err != nil {
-			return err
-		}
-		if d.IsDir() || d.Name() != "kep.yaml" {
-			return nil
-		}
-
-		v, err := VerifyTechLeadApprovers(path, techLeads)
-		if err != nil {
-			return err
-		}
-		violations = append(violations, v...)
-
-		return nil
+	return walkKEPs(kepsRootDir, func(path string) ([]Violation, error) {
+		return VerifyTechLeadApprovers(path, techLeads)
 	})
-	if err != nil {
-		return nil, err
-	}
-
-	return violations, nil
 }

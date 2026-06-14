@@ -23,3 +23,20 @@ assigned reviewers under `reviewers:`, assigned approvers under `approvers:`.
 Conversely, every entry in an `OWNERS` file must have a corresponding annotation
 in `kep.yaml` — extra entries in `OWNERS` that are not annotated in `kep.yaml`
 are also flagged as violations.
+
+## SIG Node tech-lead approvers
+
+Every KEP under `keps/sig-node/` must list an acceptable approver in its
+`kep.yaml`, depending on its `stage`:
+
+- **`stage: alpha`** — at least one member of the `sig-node-tech-leads` group
+  (defined in the repo-root `OWNERS_ALIASES`) must be listed under `approvers:`.
+  Listing the `@sig-node-tech-leads` alias directly also satisfies this. Alpha
+  KEPs MUST NOT annotate any approver with `# sig-node-assigned-approver` — that
+  marker is reserved for later stages.
+- **non-alpha** (`beta`, `stable`, …) — list either a `sig-node-tech-leads`
+  member (or the `@sig-node-tech-leads` alias) OR an approver annotated with
+  `# sig-node-assigned-approver`.
+
+A KEP with no approvers always fails. This is enforced by the
+`TestNodeTechLeadApprovers` test, run in CI via `hack/verify-node-approvers.sh`.
