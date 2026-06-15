@@ -3,5 +3,5 @@ kep-number: 5
 owning-sig: sig-node
 stage: beta
 approvers:
-  - "@someoneelse" # sig-node-assigned-approver
+  - "@tallclair" # sig-node-assigned-approver
 latest-milestone: "v1.37"

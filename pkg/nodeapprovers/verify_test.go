@@ -261,7 +261,7 @@ func TestVerifyTechLeadApprovers(t *testing.T) {
 			want: techLeadViolationsFor("alpha-marker-not-allowed",
 				Violation{
 					Role:   approverRole,
-					User:   "someoneelse",
+					User:   "tallclair",
 					Reason: "alpha-stage KEP must not use # sig-node-assigned-approver marker",
 				},
 			),
@@ -357,7 +357,7 @@ func TestVerifyAllTechLeadApprovers(t *testing.T) {
 	want = append(want, techLeadViolationsFor("alpha-marker-not-allowed",
 		Violation{
 			Role:   approverRole,
-			User:   "someoneelse",
+			User:   "tallclair",
 			Reason: "alpha-stage KEP must not use # sig-node-assigned-approver marker",
 		},
 	)...)

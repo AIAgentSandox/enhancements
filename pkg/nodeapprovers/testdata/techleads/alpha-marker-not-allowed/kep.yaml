@@ -4,5 +4,5 @@ owning-sig: sig-node
 stage: alpha
 approvers:
   - "@dchen1107"
-  - "@someoneelse" # sig-node-assigned-approver
+  - "@tallclair" # sig-node-assigned-approver
 latest-milestone: "v1.37"
