@@ -21,8 +21,10 @@ limitations under the License.
 package nodeapprovers
 
 import (
+	"encoding/json"
 	"fmt"
 	"io/fs"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -357,12 +359,11 @@ func parseMilestoneMinor(milestone string) int {
 type kepMetadata struct {
 	stage           string
 	latestMilestone string
-	alphaMilestone  string
 	entries         []approverEntry
 }
 
 // parseKEPMetadata parses a kep.yaml and returns its stage, latest-milestone,
-// milestone.alpha, and approvers sequence.
+// and approvers sequence.
 func parseKEPMetadata(kepYAMLPath string) (kepMetadata, error) {
 	root, err := parseKEPRoot(kepYAMLPath)
 	if err != nil {
@@ -375,11 +376,6 @@ func parseKEPMetadata(kepYAMLPath string) (kepMetadata, error) {
 	}
 	if msNode := mappingValue(root, "latest-milestone"); msNode != nil && msNode.Kind == yaml.ScalarNode {
 		meta.latestMilestone = strings.TrimSpace(msNode.Value)
-	}
-	if milestoneMap := mappingValue(root, "milestone"); milestoneMap != nil {
-		if alphaNode := mappingValue(milestoneMap, "alpha"); alphaNode != nil && alphaNode.Kind == yaml.ScalarNode {
-			meta.alphaMilestone = strings.TrimSpace(alphaNode.Value)
-		}
 	}
 
 	approvers := mappingValue(root, "approvers")
@@ -402,16 +398,20 @@ func parseKEPMetadata(kepYAMLPath string) (kepMetadata, error) {
 
 // VerifyTechLeadApprovers verifies that a single kep.yaml lists an acceptable
 // approver per the stage-dependent rules and returns any violations found.
+// upcomingMinor is the minor version of the upcoming Kubernetes release (e.g. 37
+// for v1.37); it determines whether an alpha KEP is actively in alpha or from a
+// past cycle.
 //
-//   - alpha (actively in alpha, i.e. latest-milestone == milestone.alpha):
-//     at least one sig-node-tech-leads member MUST be listed, and no approver
-//     may carry the "# sig-node-assigned-approver" marker.
-//   - alpha (past alpha, i.e. latest-milestone > milestone.alpha): the marker
-//     restriction is relaxed since the KEP is preparing for the next stage.
+//   - alpha (latest-milestone >= upcoming release): at least one
+//     sig-node-tech-leads member MUST be listed, and no approver may carry the
+//     "# sig-node-assigned-approver" marker.
+//   - alpha (latest-milestone < upcoming release): the marker restriction is
+//     relaxed since the KEP is from a past cycle and may be preparing for the
+//     next stage.
 //   - non-alpha: a sig-node-tech-leads member OR an approver marked
 //     "# sig-node-assigned-approver" MUST be listed.
 //
-func VerifyTechLeadApprovers(kepYAMLPath string, techLeads map[string]bool) ([]Violation, error) {
+func VerifyTechLeadApprovers(kepYAMLPath string, techLeads map[string]bool, upcomingMinor int) ([]Violation, error) {
 	meta, err := parseKEPMetadata(kepYAMLPath)
 	if err != nil {
 		return nil, err
@@ -446,18 +446,10 @@ func VerifyTechLeadApprovers(kepYAMLPath string, techLeads map[string]bool) ([]V
 		}
 	}
 
-	// Determine whether this alpha KEP is actively in its alpha milestone
-	// or has moved past it (latest-milestone > milestone.alpha). When past
-	// alpha the marker restriction is relaxed — the KEP is preparing for
-	// the next stage and may already have an assigned approver.
-	activelyAlpha := stage == "alpha"
-	if activelyAlpha && meta.alphaMilestone != "" {
-		latestMinor := parseMilestoneMinor(meta.latestMilestone)
-		alphaMinor := parseMilestoneMinor(meta.alphaMilestone)
-		if latestMinor > alphaMinor {
-			activelyAlpha = false
-		}
-	}
+	// A KEP is "actively alpha" only if its latest-milestone is in the
+	// upcoming release or later. KEPs from past cycles may already have
+	// assigned-approver markers in preparation for the next stage.
+	activelyAlpha := stage == "alpha" && parseMilestoneMinor(meta.latestMilestone) >= upcomingMinor
 
 	var violations []Violation
 	if activelyAlpha {
@@ -494,14 +486,58 @@ func VerifyTechLeadApprovers(kepYAMLPath string, techLeads map[string]bool) ([]V
 
 // VerifyAllTechLeadApprovers loads the sig-node-tech-leads set from
 // ownersAliasesPath, then walks kepsRootDir for kep.yaml files and aggregates
-// the tech-lead approver violations from each.
-func VerifyAllTechLeadApprovers(kepsRootDir, ownersAliasesPath string) ([]Violation, error) {
+// the tech-lead approver violations from each. upcomingMinor is the minor
+// version of the upcoming Kubernetes release (see FetchUpcomingMinor).
+func VerifyAllTechLeadApprovers(kepsRootDir, ownersAliasesPath string, upcomingMinor int) ([]Violation, error) {
 	techLeads, err := loadTechLeads(ownersAliasesPath)
 	if err != nil {
 		return nil, err
 	}
 
 	return walkKEPs(kepsRootDir, func(path string) ([]Violation, error) {
-		return VerifyTechLeadApprovers(path, techLeads)
+		return VerifyTechLeadApprovers(path, techLeads, upcomingMinor)
 	})
+}
+
+// sigReleaseContentsURL is the GitHub API endpoint for listing the releases
+// directory in the kubernetes/sig-release repository.
+const sigReleaseContentsURL = "https://api.github.com/repos/kubernetes/sig-release/contents/releases"
+
+// FetchUpcomingMinor queries the kubernetes/sig-release GitHub repository to
+// determine the upcoming Kubernetes minor version. It lists the release-X.Y
+// directories and returns the highest minor version found.
+func FetchUpcomingMinor() (int, error) {
+	resp, err := http.Get(sigReleaseContentsURL)
+	if err != nil {
+		return 0, fmt.Errorf("fetching sig-release contents: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return 0, fmt.Errorf("fetching sig-release contents: HTTP %d", resp.StatusCode)
+	}
+
+	var entries []struct {
+		Name string `json:"name"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&entries); err != nil {
+		return 0, fmt.Errorf("decoding sig-release contents: %w", err)
+	}
+
+	maxMinor := 0
+	for _, e := range entries {
+		name := strings.TrimPrefix(e.Name, "release-")
+		if name == e.Name {
+			continue // not a release-X.Y directory
+		}
+		if minor := parseMilestoneMinor(name); minor > maxMinor {
+			maxMinor = minor
+		}
+	}
+
+	if maxMinor == 0 {
+		return 0, fmt.Errorf("no release-X.Y directories found in sig-release")
+	}
+
+	return maxMinor, nil
 }

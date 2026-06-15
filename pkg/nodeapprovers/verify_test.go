@@ -329,7 +329,7 @@ func TestVerifyTechLeadApprovers(t *testing.T) {
 	for _, tc := range testcases {
 		t.Run(tc.name, func(t *testing.T) {
 			kepPath := filepath.Join("testdata", "techleads", tc.dir, "kep.yaml")
-			violations, err := VerifyTechLeadApprovers(kepPath, techLeadsFixture)
+			violations, err := VerifyTechLeadApprovers(kepPath, techLeadsFixture, 37)
 			require.NoError(t, err)
 			require.ElementsMatch(t, tc.want, violations, "violations: %v", violations)
 		})
@@ -338,7 +338,7 @@ func TestVerifyTechLeadApprovers(t *testing.T) {
 
 func TestVerifyAllTechLeadApprovers(t *testing.T) {
 	root := filepath.Join("testdata", "techleads")
-	violations, err := VerifyAllTechLeadApprovers(root, filepath.Join(root, "OWNERS_ALIASES"))
+	violations, err := VerifyAllTechLeadApprovers(root, filepath.Join(root, "OWNERS_ALIASES"), 37)
 	require.NoError(t, err)
 
 	want := make([]Violation, 0, 7)

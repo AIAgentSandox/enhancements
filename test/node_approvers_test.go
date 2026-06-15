@@ -61,6 +61,14 @@ func TestNodeApprovers(t *testing.T) {
 // keps/sig-node tree using the repo-root OWNERS_ALIASES and is exercised
 // automatically in CI via hack/test-go.sh.
 func TestNodeTechLeadApprovers(t *testing.T) {
+	upcomingMinor, err := nodeapprovers.FetchUpcomingMinor()
+	if err != nil {
+		upcomingMinor = 999
+		t.Logf("WARNING: failed to fetch upcoming minor version (%v), falling back to %d (all alpha KEPs will be strictly enforced)", err, upcomingMinor)
+	} else {
+		t.Logf("upcoming Kubernetes minor version: %d", upcomingMinor)
+	}
+
 	wd, err := os.Getwd()
 	require.Nil(t, err)
 
@@ -69,6 +77,7 @@ func TestNodeTechLeadApprovers(t *testing.T) {
 	violations, err := nodeapprovers.VerifyAllTechLeadApprovers(
 		filepath.Join(rootDir, "keps", "sig-node"),
 		filepath.Join(rootDir, "OWNERS_ALIASES"),
+		upcomingMinor,
 	)
 	require.Nil(t, err)
 
