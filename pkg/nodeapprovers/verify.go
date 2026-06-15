@@ -25,10 +25,16 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"gopkg.in/yaml.v3"
 )
+
+// minEnforcedMinor is the minimum Kubernetes minor version (in latest-milestone)
+// for which tech-lead approver rules are enforced. KEPs whose latest-milestone
+// is before v1.<minEnforcedMinor> are grandfathered.
+const minEnforcedMinor = 36
 
 // Hardcoded inline-comment markers identifying SIG Node assigned reviewers and
 // approvers in a kep.yaml file.
@@ -331,34 +337,61 @@ type approverEntry struct {
 	Marked bool
 }
 
-// approverEntries parses a kep.yaml and returns its top-level stage scalar and
-// the approvers sequence as approverEntry values.
-func approverEntries(kepYAMLPath string) (stage string, entries []approverEntry, err error) {
+// parseMilestoneMinor extracts the minor version number from a milestone string
+// like "v1.36" or "v1.22". Returns 0 if the string is empty or unparseable.
+func parseMilestoneMinor(milestone string) int {
+	milestone = strings.TrimSpace(strings.Trim(milestone, "\""))
+	milestone = strings.TrimPrefix(milestone, "v")
+	parts := strings.SplitN(milestone, ".", 3)
+	if len(parts) < 2 {
+		return 0
+	}
+	minor, err := strconv.Atoi(parts[1])
+	if err != nil {
+		return 0
+	}
+	return minor
+}
+
+// kepMetadata holds the parsed fields from a kep.yaml needed for verification.
+type kepMetadata struct {
+	stage           string
+	latestMilestone string
+	entries         []approverEntry
+}
+
+// parseKEPMetadata parses a kep.yaml and returns its stage, latest-milestone,
+// and approvers sequence.
+func parseKEPMetadata(kepYAMLPath string) (kepMetadata, error) {
 	root, err := parseKEPRoot(kepYAMLPath)
 	if err != nil {
-		return "", nil, err
+		return kepMetadata{}, err
 	}
 
+	var meta kepMetadata
 	if stageNode := mappingValue(root, "stage"); stageNode != nil && stageNode.Kind == yaml.ScalarNode {
-		stage = strings.TrimSpace(stageNode.Value)
+		meta.stage = strings.TrimSpace(stageNode.Value)
+	}
+	if msNode := mappingValue(root, "latest-milestone"); msNode != nil && msNode.Kind == yaml.ScalarNode {
+		meta.latestMilestone = strings.TrimSpace(msNode.Value)
 	}
 
 	approvers := mappingValue(root, "approvers")
 	if approvers == nil || approvers.Kind != yaml.SequenceNode {
-		return stage, nil, nil
+		return meta, nil
 	}
 
 	for _, item := range approvers.Content {
 		if item.Kind != yaml.ScalarNode {
 			continue
 		}
-		entries = append(entries, approverEntry{
+		meta.entries = append(meta.entries, approverEntry{
 			User:   normalizeUser(item.Value),
 			Marked: markerOf(item.LineComment) == approverMarker,
 		})
 	}
 
-	return stage, entries, nil
+	return meta, nil
 }
 
 // VerifyTechLeadApprovers verifies that a single kep.yaml lists an acceptable
@@ -369,13 +402,21 @@ func approverEntries(kepYAMLPath string) (stage string, entries []approverEntry,
 //   - non-alpha: a sig-node-tech-leads member OR an approver marked
 //     "# sig-node-assigned-approver" MUST be listed.
 //
-// Listing the "@sig-node-tech-leads" group alias directly under approvers also
-// satisfies the tech-lead requirement.
 func VerifyTechLeadApprovers(kepYAMLPath string, techLeads map[string]bool) ([]Violation, error) {
-	stage, entries, err := approverEntries(kepYAMLPath)
+	meta, err := parseKEPMetadata(kepYAMLPath)
 	if err != nil {
 		return nil, err
 	}
+
+	// Skip KEPs whose latest-milestone predates the enforcement threshold.
+	// A missing or unparseable milestone (minor == 0) is also skipped, as
+	// those are legacy KEPs that predate the policy.
+	if minor := parseMilestoneMinor(meta.latestMilestone); minor < minEnforcedMinor {
+		return nil, nil
+	}
+
+	entries := meta.entries
+	stage := meta.stage
 
 	if len(entries) == 0 {
 		return []Violation{{
@@ -388,9 +429,7 @@ func VerifyTechLeadApprovers(kepYAMLPath string, techLeads map[string]bool) ([]V
 	hasTechLead := false
 	hasMarked := false
 	for _, e := range entries {
-		// An individual sig-node-tech-leads member, or the group alias itself
-		// (e.g. "@sig-node-tech-leads"), both satisfy the tech-lead requirement.
-		if techLeads[e.User] || e.User == techLeadsAlias {
+		if techLeads[e.User] {
 			hasTechLead = true
 		}
 		if e.Marked {

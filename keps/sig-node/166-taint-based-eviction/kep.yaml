@@ -8,7 +8,6 @@ participating-sigs:
 reviewers:
   - "@Huang-Wei"
 approvers:
-  - "@sig-node-tech-leads"
   - sig-node
   - sig-cloud-provider
 editor:

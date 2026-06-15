@@ -15,10 +15,10 @@ reviewers:
   - "@MikeZappa87"
   - "@s1061123"
 approvers:
-  - "@sig-node-tech-leads"
   - "@aojea"
   - "@thockin"
   - "@johnbelamaric"
+  - "@mrunalp"
 
 see-also:
   - "/keps/sig-node/3063-dynamic-resource-allocation"

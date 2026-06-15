@@ -11,7 +11,6 @@ reviewers:
   - "@liggitt"
   - "@thockin"
 approvers:
-  - "@sig-node-tech-leads"
   - "@thockin"
   - "@SergeyKanzhelev" # sig-node-assigned-approver
 

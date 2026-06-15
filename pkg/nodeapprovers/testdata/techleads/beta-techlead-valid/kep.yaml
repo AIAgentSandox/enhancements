@@ -5,3 +5,4 @@ stage: beta
 approvers:
   - "@mrunalp"
   - "@someoneelse"
+latest-milestone: "v1.37"

@@ -11,7 +11,6 @@ reviewers:
   - "@klueska"
   - "@ffromani"
 approvers:
-  - "@sig-node-tech-leads"
   - "@klueska"
 see-also: 
   - "keps/sig-node/2625-cpumanager-policies-thread-placement/"

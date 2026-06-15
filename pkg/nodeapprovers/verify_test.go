@@ -267,12 +267,24 @@ func TestVerifyTechLeadApprovers(t *testing.T) {
 			),
 		},
 		{
-			name: "alpha listing the sig-node-tech-leads alias is valid",
-			dir:  "alpha-alias-valid",
+			name: "alpha listing the sig-node-tech-leads alias is not valid",
+			dir:  "alpha-alias-invalid",
+			want: techLeadViolationsFor("alpha-alias-invalid",
+				Violation{
+					Role:   approverRole,
+					Reason: "alpha-stage KEP must list at least one sig-node-tech-leads member as approver",
+				},
+			),
 		},
 		{
-			name: "beta listing the sig-node-tech-leads alias is valid",
-			dir:  "beta-alias-valid",
+			name: "beta listing the sig-node-tech-leads alias is not valid",
+			dir:  "beta-alias-invalid",
+			want: techLeadViolationsFor("beta-alias-invalid",
+				Violation{
+					Role:   approverRole,
+					Reason: "non-alpha KEP must list a sig-node-tech-leads member or an approver marked # sig-node-assigned-approver",
+				},
+			),
 		},
 		{
 			name: "beta with tech lead is valid",
@@ -329,7 +341,13 @@ func TestVerifyAllTechLeadApprovers(t *testing.T) {
 	violations, err := VerifyAllTechLeadApprovers(root, filepath.Join(root, "OWNERS_ALIASES"))
 	require.NoError(t, err)
 
-	want := make([]Violation, 0, 4)
+	want := make([]Violation, 0, 7)
+	want = append(want, techLeadViolationsFor("alpha-alias-invalid",
+		Violation{
+			Role:   approverRole,
+			Reason: "alpha-stage KEP must list at least one sig-node-tech-leads member as approver",
+		},
+	)...)
 	want = append(want, techLeadViolationsFor("alpha-missing-techlead",
 		Violation{
 			Role:   approverRole,
@@ -341,6 +359,12 @@ func TestVerifyAllTechLeadApprovers(t *testing.T) {
 			Role:   approverRole,
 			User:   "someoneelse",
 			Reason: "alpha-stage KEP must not use # sig-node-assigned-approver marker",
+		},
+	)...)
+	want = append(want, techLeadViolationsFor("beta-alias-invalid",
+		Violation{
+			Role:   approverRole,
+			Reason: "non-alpha KEP must list a sig-node-tech-leads member or an approver marked # sig-node-assigned-approver",
 		},
 	)...)
 	want = append(want, techLeadViolationsFor("beta-missing",

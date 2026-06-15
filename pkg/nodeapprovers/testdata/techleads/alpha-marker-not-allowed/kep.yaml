@@ -5,3 +5,4 @@ stage: alpha
 approvers:
   - "@dchen1107"
   - "@someoneelse" # sig-node-assigned-approver
+latest-milestone: "v1.37"
