@@ -357,11 +357,12 @@ func parseMilestoneMinor(milestone string) int {
 type kepMetadata struct {
 	stage           string
 	latestMilestone string
+	alphaMilestone  string
 	entries         []approverEntry
 }
 
 // parseKEPMetadata parses a kep.yaml and returns its stage, latest-milestone,
-// and approvers sequence.
+// milestone.alpha, and approvers sequence.
 func parseKEPMetadata(kepYAMLPath string) (kepMetadata, error) {
 	root, err := parseKEPRoot(kepYAMLPath)
 	if err != nil {
@@ -374,6 +375,11 @@ func parseKEPMetadata(kepYAMLPath string) (kepMetadata, error) {
 	}
 	if msNode := mappingValue(root, "latest-milestone"); msNode != nil && msNode.Kind == yaml.ScalarNode {
 		meta.latestMilestone = strings.TrimSpace(msNode.Value)
+	}
+	if milestoneMap := mappingValue(root, "milestone"); milestoneMap != nil {
+		if alphaNode := mappingValue(milestoneMap, "alpha"); alphaNode != nil && alphaNode.Kind == yaml.ScalarNode {
+			meta.alphaMilestone = strings.TrimSpace(alphaNode.Value)
+		}
 	}
 
 	approvers := mappingValue(root, "approvers")
@@ -397,8 +403,11 @@ func parseKEPMetadata(kepYAMLPath string) (kepMetadata, error) {
 // VerifyTechLeadApprovers verifies that a single kep.yaml lists an acceptable
 // approver per the stage-dependent rules and returns any violations found.
 //
-//   - alpha: at least one sig-node-tech-leads member MUST be listed, and no
-//     approver may carry the "# sig-node-assigned-approver" marker.
+//   - alpha (actively in alpha, i.e. latest-milestone == milestone.alpha):
+//     at least one sig-node-tech-leads member MUST be listed, and no approver
+//     may carry the "# sig-node-assigned-approver" marker.
+//   - alpha (past alpha, i.e. latest-milestone > milestone.alpha): the marker
+//     restriction is relaxed since the KEP is preparing for the next stage.
 //   - non-alpha: a sig-node-tech-leads member OR an approver marked
 //     "# sig-node-assigned-approver" MUST be listed.
 //
@@ -437,8 +446,21 @@ func VerifyTechLeadApprovers(kepYAMLPath string, techLeads map[string]bool) ([]V
 		}
 	}
 
+	// Determine whether this alpha KEP is actively in its alpha milestone
+	// or has moved past it (latest-milestone > milestone.alpha). When past
+	// alpha the marker restriction is relaxed — the KEP is preparing for
+	// the next stage and may already have an assigned approver.
+	activelyAlpha := stage == "alpha"
+	if activelyAlpha && meta.alphaMilestone != "" {
+		latestMinor := parseMilestoneMinor(meta.latestMilestone)
+		alphaMinor := parseMilestoneMinor(meta.alphaMilestone)
+		if latestMinor > alphaMinor {
+			activelyAlpha = false
+		}
+	}
+
 	var violations []Violation
-	if stage == "alpha" {
+	if activelyAlpha {
 		if !hasTechLead {
 			violations = append(violations, Violation{
 				KEPPath: kepYAMLPath,
