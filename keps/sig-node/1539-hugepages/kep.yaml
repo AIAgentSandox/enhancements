@@ -10,7 +10,7 @@ participating-sigs:
 reviewers:
   - "@vishnu"
 approvers:
-  - "@dawnchen"
+  - "@dchen1107"
 stage: stable
 latest-milestone: "v1.22"
 # The milestone at which this feature was, or is targeted to be, at each stage.
